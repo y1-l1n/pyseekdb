@@ -161,27 +161,79 @@ class BaseClient(BaseConnection, AdminAPI):
         # Create and return Collection object
         return Collection(client=self, name=name, dimension=dimension)
     
-    @abstractmethod
     def delete_collection(self, name: str) -> None:
         """
         Delete a collection (user-facing API)
         
         Args:
             name: Collection name
+            
+        Raises:
+            ValueError: If collection does not exist
         """
-        pass
+        # Construct table name: c$v1${name}
+        table_name = f"c$v1{name}"
+        
+        # Check if table exists first
+        if not self.has_collection(name):
+            raise ValueError(f"Collection '{name}' does not exist (table '{table_name}' not found)")
+        
+        # Execute DROP TABLE SQL
+        self.execute(f"DROP TABLE IF EXISTS `{table_name}`")
     
-    @abstractmethod
-    def list_collections(self) -> List["Collection"]:
+    def list_collections(self) -> List[Collection]:
         """
         List all collections (user-facing API)
         
         Returns:
             List of Collection objects
         """
-        pass
+        # List all tables that start with 'c$v1'
+        # Use SHOW TABLES LIKE 'c$v1%' to filter collection tables
+        try:
+            tables = self.execute("SHOW TABLES LIKE 'c$v1%'")
+        except Exception:
+            # Fallback: try to query information_schema
+            try:
+                # Get current database name
+                db_result = self.execute("SELECT DATABASE()")
+                if db_result and len(db_result) > 0:
+                    db_name = db_result[0][0] if isinstance(db_result[0], (tuple, list)) else db_result[0].get('DATABASE()', '')
+                    tables = self.execute(
+                        f"SELECT TABLE_NAME FROM information_schema.TABLES "
+                        f"WHERE TABLE_SCHEMA = '{db_name}' AND TABLE_NAME LIKE 'c$v1%'"
+                    )
+                else:
+                    return []
+            except Exception:
+                return []
+        
+        collections = []
+        for row in tables:
+            # Extract table name
+            if isinstance(row, dict):
+                # Server client returns dict, get the first value
+                table_name = list(row.values())[0] if row else ''
+            elif isinstance(row, (tuple, list)):
+                # Embedded client returns tuple, first element is table name
+                table_name = row[0] if len(row) > 0 else ''
+            else:
+                table_name = str(row)
+            
+            # Extract collection name from table name (remove 'c$v1' prefix)
+            if table_name.startswith('c$v1'):
+                collection_name = table_name[4:]  # Remove 'c$v1' prefix
+                
+                # Get collection with dimension
+                try:
+                    collection = self.get_collection(collection_name)
+                    collections.append(collection)
+                except Exception:
+                    # Skip if we can't get collection info
+                    continue
+        
+        return collections
     
-    @abstractmethod
     def has_collection(self, name: str) -> bool:
         """
         Check if a collection exists (user-facing API)
@@ -192,7 +244,50 @@ class BaseClient(BaseConnection, AdminAPI):
         Returns:
             True if exists, False otherwise
         """
-        pass
+        # Construct table name: c$v1${name}
+        table_name = f"c$v1{name}"
+        
+        # Check if table exists
+        try:
+            # Try to describe the table
+            table_info = self.execute(f"DESCRIBE `{table_name}`")
+            return table_info is not None and len(table_info) > 0
+        except Exception:
+            # If DESCRIBE fails, table doesn't exist
+            return False
+    
+    def get_or_create_collection(
+        self,
+        name: str,
+        dimension: Optional[int] = None,
+        **kwargs
+    ) -> Collection:
+        """
+        Get an existing collection or create it if it doesn't exist (user-facing API)
+        
+        Args:
+            name: Collection name
+            dimension: Vector dimension (required if creating new collection)
+            **kwargs: Additional parameters for create_collection
+            
+        Returns:
+            Collection object
+            
+        Raises:
+            ValueError: If collection doesn't exist and dimension is not provided
+        """
+        # First, try to get the collection
+        if self.has_collection(name):
+            return self.get_collection(name)
+        
+        # Collection doesn't exist, create it
+        if dimension is None:
+            raise ValueError(
+                f"Collection '{name}' does not exist and dimension parameter is required "
+                f"for creating a new collection"
+            )
+        
+        return self.create_collection(name=name, dimension=dimension, **kwargs)
     
     # ==================== Collection Internal Operations (Called by Collection) ====================
     # These methods are called by Collection objects, different clients implement different logic

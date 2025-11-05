@@ -165,25 +165,9 @@ class SeekdbEmbeddedClient(BaseClient):
     
     # create_collection is inherited from BaseClient - no override needed
     # get_collection is inherited from BaseClient - no override needed
-    
-    def delete_collection(self, name: str) -> None:
-        """Delete collection"""
-        logger.info(f"SeekdbEmbeddedClient: delete_collection framework for {name}")
-        # TODO: implement seekdb delete_collection logic
-        pass
-    
-    def list_collections(self) -> List[Collection]:
-        """List all collections"""
-        logger.info("SeekdbEmbeddedClient: list_collections framework")
-        # TODO: implement seekdb list_collections logic
-        # Return list of Collection objects
-        return []
-    
-    def has_collection(self, name: str) -> bool:
-        """Check if collection exists"""
-        logger.info(f"SeekdbEmbeddedClient: has_collection framework for {name}")
-        # TODO: implement seekdb has_collection logic
-        return False
+    # delete_collection is inherited from BaseClient - no override needed
+    # list_collections is inherited from BaseClient - no override needed
+    # has_collection is inherited from BaseClient - no override needed
     
     # ==================== Collection Internal Operations ====================
     # These methods are called by Collection objects

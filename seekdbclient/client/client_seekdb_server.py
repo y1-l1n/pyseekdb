@@ -111,25 +111,9 @@ class SeekdbServerClient(BaseClient):
     
     # create_collection is inherited from BaseClient - no override needed
     # get_collection is inherited from BaseClient - no override needed
-    
-    def delete_collection(self, name: str) -> None:
-        """Delete collection"""
-        logger.info(f"SeekdbServerClient: delete_collection framework for {name}")
-        # TODO: implement PyMySQL delete_collection logic
-        pass
-    
-    def list_collections(self) -> List[Collection]:
-        """List all collections"""
-        logger.info("SeekdbServerClient: list_collections framework")
-        # TODO: implement PyMySQL list_collections logic
-        # Return list of Collection objects
-        return []
-    
-    def has_collection(self, name: str) -> bool:
-        """Check if collection exists"""
-        logger.info(f"SeekdbServerClient: has_collection framework for {name}")
-        # TODO: implement PyMySQL has_collection logic
-        return False
+    # delete_collection is inherited from BaseClient - no override needed
+    # list_collections is inherited from BaseClient - no override needed
+    # has_collection is inherited from BaseClient - no override needed
     
     # ==================== Collection Internal Operations ====================
     # These methods are called by Collection objects

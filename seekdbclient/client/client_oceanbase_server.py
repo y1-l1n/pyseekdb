@@ -114,25 +114,9 @@ class OceanBaseServerClient(BaseClient):
     
     # create_collection is inherited from BaseClient - no override needed
     # get_collection is inherited from BaseClient - no override needed
-    
-    def delete_collection(self, name: str) -> None:
-        """Delete collection"""
-        logger.info(f"OceanBaseServerClient: delete_collection framework for {name}")
-        # TODO: implement OceanBase delete_collection logic
-        pass
-    
-    def list_collections(self) -> List[Collection]:
-        """List all collections"""
-        logger.info("OceanBaseServerClient: list_collections framework")
-        # TODO: implement OceanBase list_collections logic
-        # Return list of Collection objects
-        return []
-    
-    def has_collection(self, name: str) -> bool:
-        """Check if collection exists"""
-        logger.info(f"OceanBaseServerClient: has_collection framework for {name}")
-        # TODO: implement OceanBase has_collection logic
-        return False
+    # delete_collection is inherited from BaseClient - no override needed
+    # list_collections is inherited from BaseClient - no override needed
+    # has_collection is inherited from BaseClient - no override needed
     
     # ==================== Collection Internal Operations ====================
     # These methods are called by Collection objects
