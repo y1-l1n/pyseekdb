@@ -9,6 +9,8 @@ from typing import List, Optional, Sequence, Dict, Any, Union, TYPE_CHECKING, Tu
 
 from .base_connection import BaseConnection
 from .admin_client import AdminAPI, DEFAULT_TENANT
+from .sql_based_collection_operator import SqlBasedCollectionOperator
+from .meta_info import CollectionNames
 from .query_result import QueryResult
 from .filters import FilterBuilder
 
@@ -17,7 +19,6 @@ from .collection import Collection
 from .database import Database
 
 logger = logging.getLogger(__name__)
-
 
 class ClientAPI(ABC):
     """
@@ -96,7 +97,7 @@ class BaseClient(BaseConnection, AdminAPI):
             raise ValueError("dimension parameter is required for creating a collection")
         
         # Construct table name: c$v1${name}
-        table_name = f"c$v1${name}"
+        table_name = CollectionNames.table_name(name)
         
         # Construct CREATE TABLE SQL statement
         sql = f"""CREATE TABLE `{table_name}` (
@@ -128,7 +129,7 @@ class BaseClient(BaseConnection, AdminAPI):
             ValueError: If collection does not exist
         """
         # Construct table name: c$v1${name}
-        table_name = f"c$v1${name}"
+        table_name = CollectionNames.table_name(name)
         
         # Check if table exists by describing it
         try:
@@ -176,7 +177,7 @@ class BaseClient(BaseConnection, AdminAPI):
             ValueError: If collection does not exist
         """
         # Construct table name: c$v1${name}
-        table_name = f"c$v1${name}"
+        table_name = CollectionNames.table_name(name)
         
         # Check if table exists first
         if not self.has_collection(name):
@@ -249,7 +250,7 @@ class BaseClient(BaseConnection, AdminAPI):
             True if exists, False otherwise
         """
         # Construct table name: c$v1${name}
-        table_name = f"c$v1${name}"
+        table_name = CollectionNames.table_name(name)
         
         # Check if table exists
         try:
@@ -298,7 +299,6 @@ class BaseClient(BaseConnection, AdminAPI):
     
     # -------------------- DML Operations --------------------
     
-    @abstractmethod
     def _collection_add(
         self,
         collection_id: Optional[str],
@@ -321,9 +321,8 @@ class BaseClient(BaseConnection, AdminAPI):
             documents: Single document or list of documents (optional)
             **kwargs: Additional parameters
         """
-        pass
+        SqlBasedCollectionOperator.add(self, collection_name, ids, vectors, metadatas, documents)
     
-    @abstractmethod
     def _collection_update(
         self,
         collection_id: Optional[str],
@@ -346,9 +345,8 @@ class BaseClient(BaseConnection, AdminAPI):
             documents: New documents (optional)
             **kwargs: Additional parameters
         """
-        pass
+        SqlBasedCollectionOperator.update(self, collection_name, ids, vectors, metadatas, documents)
     
-    @abstractmethod
     def _collection_upsert(
         self,
         collection_id: Optional[str],
@@ -371,9 +369,8 @@ class BaseClient(BaseConnection, AdminAPI):
             documents: Documents (optional)
             **kwargs: Additional parameters
         """
-        pass
+        SqlBasedCollectionOperator.upsert(self, collection_name, ids, vectors, metadatas, documents)
     
-    @abstractmethod
     def _collection_delete(
         self,
         collection_id: Optional[str],
@@ -394,7 +391,7 @@ class BaseClient(BaseConnection, AdminAPI):
             where_document: Filter condition on documents (optional)
             **kwargs: Additional parameters
         """
-        pass
+        SqlBasedCollectionOperator.delete(self, collection_name, ids, where, where_document, **kwargs)
     
     # -------------------- DQL Operations --------------------
     # Note: _collection_query() and _collection_get() are implemented below with common SQL-based logic
