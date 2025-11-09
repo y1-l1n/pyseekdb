@@ -55,6 +55,7 @@ from .client import (
     Database,
 )
 from .client.collection import Collection
+from .client.query_result import QueryResult
 
 __version__ = "0.1.0"
 __author__ = "SeekDBClient Team"
@@ -69,6 +70,7 @@ __all__ = [
     'Client',
     'OBClient',
     'Collection',
+    'QueryResult',
     'AdminAPI',
     'AdminClient',
     'OBAdminClient',

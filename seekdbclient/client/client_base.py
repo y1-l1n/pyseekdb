@@ -1104,7 +1104,7 @@ class BaseClient(BaseConnection, AdminAPI):
         where_document: Optional[Dict[str, Any]] = None,
         include: Optional[List[str]] = None,
         **kwargs
-    ) -> QueryResult:
+    ) -> Union[QueryResult, List[QueryResult]]:
         """
         [Internal] Query collection by vector similarity - Common SQL-based implementation
         
@@ -1120,7 +1120,8 @@ class BaseClient(BaseConnection, AdminAPI):
             **kwargs: Additional parameters
             
         Returns:
-            QueryResult object containing query results
+            - If single vector/text provided: QueryResult object containing query results
+            - If multiple vectors/texts provided: List of QueryResult objects, one for each query vector
         """
         logger.info(f"Querying collection '{collection_name}' with n_results={n_results}")
         conn = self._ensure_connection()
@@ -1139,6 +1140,9 @@ class BaseClient(BaseConnection, AdminAPI):
         if not query_vectors:
             raise ValueError("Either query_embeddings or query_texts must be provided")
         
+        # Check if multiple vectors provided
+        is_multiple_vectors = len(query_vectors) > 1
+        
         # Normalize include fields
         include_fields = self._normalize_include_fields(include)
         
@@ -1148,9 +1152,10 @@ class BaseClient(BaseConnection, AdminAPI):
         # Build WHERE clause from filters
         where_clause, params = self._build_where_clause(where, where_document)
         
-        # Collect all results from all query vectors
-        all_results = []
         use_context_manager = self._use_context_manager_for_cursor()
+        
+        # Collect results for each query vector separately
+        query_results = []
         
         for query_vector in query_vectors:
             # Convert vector to string format for SQL
@@ -1176,28 +1181,27 @@ class BaseClient(BaseConnection, AdminAPI):
             
             rows = self._execute_query_with_cursor(conn, sql, query_params, use_context_manager)
             
-            # Process rows
+            # Create QueryResult for this vector
+            query_result = QueryResult()
             for row in rows:
                 result_item = self._process_query_row(row, include_fields)
-                all_results.append(result_item)
+                query_result.add_item(
+                    id=result_item.get("_id"),
+                    document=result_item.get("document"),
+                    embedding=result_item.get("embedding"),
+                    metadata=result_item.get("metadata"),
+                    distance=result_item.get("distance")
+                )
+            
+            query_results.append(query_result)
         
-        # Sort by distance and limit to n_results (in case of multiple query vectors)
-        all_results.sort(key=lambda x: x.get("distance", float("inf")))
-        all_results = all_results[:n_results]
-        
-        # Convert to QueryResult
-        query_result = QueryResult()
-        for result_dict in all_results:
-            query_result.add_item(
-                id=result_dict.get("_id"),
-                document=result_dict.get("document"),
-                embedding=result_dict.get("embedding"),
-                metadata=result_dict.get("metadata"),
-                distance=result_dict.get("distance")
-            )
-        
-        logger.info(f"✅ Query completed for '{collection_name}', found {len(query_result)} results")
-        return query_result
+        # Return single QueryResult if only one vector, otherwise return list
+        if is_multiple_vectors:
+            logger.info(f"✅ Query completed for '{collection_name}' with {len(query_vectors)} vectors, returning {len(query_results)} QueryResult objects")
+            return query_results
+        else:
+            logger.info(f"✅ Query completed for '{collection_name}', found {len(query_results[0])} results")
+            return query_results[0]
     
     def _collection_get(
         self,
@@ -1210,7 +1214,7 @@ class BaseClient(BaseConnection, AdminAPI):
         offset: Optional[int] = None,
         include: Optional[List[str]] = None,
         **kwargs
-    ) -> QueryResult:
+    ) -> Union[QueryResult, List[QueryResult]]:
         """
         [Internal] Get data from collection by IDs or filters - Common SQL-based implementation
         
@@ -1226,7 +1230,9 @@ class BaseClient(BaseConnection, AdminAPI):
             **kwargs: Additional parameters
             
         Returns:
-            QueryResult object containing get results
+            - If single ID provided: QueryResult object containing get results for that ID
+            - If multiple IDs provided (and no filters): List of QueryResult objects, one for each ID
+            - If filters provided (no IDs or multiple IDs with filters): QueryResult object containing all matching results
         """
         logger.info(f"Getting data from collection '{collection_name}'")
         conn = self._ensure_connection()
@@ -1242,11 +1248,19 @@ class BaseClient(BaseConnection, AdminAPI):
         
         # Normalize ids to list
         id_list = None
+        is_single_id = False
         if ids is not None:
             if isinstance(ids, str):
                 id_list = [ids]
+                is_single_id = True
             else:
                 id_list = ids
+                is_single_id = len(id_list) == 1
+        
+        # Check if we should return multiple QueryResults (multiple IDs and no filters)
+        has_filters = where is not None or where_document is not None
+        is_multiple_ids = id_list is not None and len(id_list) > 1
+        should_return_multiple = is_multiple_ids and not has_filters
         
         # Normalize include fields (default includes documents and metadatas)
         include_fields = self._normalize_include_fields(include)
@@ -1254,41 +1268,81 @@ class BaseClient(BaseConnection, AdminAPI):
         # Build SELECT clause - always include _id
         select_clause = self._build_select_clause(include_fields)
         
-        # Build WHERE clause from filters
-        where_clause, params = self._build_where_clause(where, where_document, id_list)
-        
-        # Build SQL query
-        sql = f"""
-            SELECT {select_clause}
-            FROM `{table_name}`
-            {where_clause}
-            LIMIT %s OFFSET %s
-        """
-        
-        # Execute query
-        query_params = params + [limit, offset]
-        logger.debug(f"Executing SQL: {sql}")
-        logger.debug(f"Parameters: {query_params}")
-        
         use_context_manager = self._use_context_manager_for_cursor()
-        rows = self._execute_query_with_cursor(conn, sql, query_params, use_context_manager)
         
-        # Build QueryResult
-        query_result = QueryResult()
-        
-        for row in rows:
-            # Process row
-            processed_row = self._process_get_row(row, include_fields)
+        # If multiple IDs and no filters, get each ID separately
+        if should_return_multiple:
+            query_results = []
+            for single_id in id_list:
+                # Build WHERE clause for this single ID
+                where_clause, params = self._build_where_clause(where, where_document, [single_id])
+                
+                # Build SQL query
+                sql = f"""
+                    SELECT {select_clause}
+                    FROM `{table_name}`
+                    {where_clause}
+                    LIMIT %s OFFSET %s
+                """
+                
+                # Execute query
+                query_params = params + [limit, offset]
+                logger.debug(f"Executing SQL: {sql}")
+                logger.debug(f"Parameters: {query_params}")
+                
+                rows = self._execute_query_with_cursor(conn, sql, query_params, use_context_manager)
+                
+                # Build QueryResult for this ID
+                query_result = QueryResult()
+                for row in rows:
+                    processed_row = self._process_get_row(row, include_fields)
+                    query_result.add_item(
+                        id=processed_row["id"],
+                        document=processed_row["document"],
+                        embedding=processed_row["embedding"],
+                        metadata=processed_row["metadata"]
+                    )
+                
+                query_results.append(query_result)
             
-            query_result.add_item(
-                id=processed_row["id"],
-                document=processed_row["document"],
-                embedding=processed_row["embedding"],
-                metadata=processed_row["metadata"]
-            )
-        
-        logger.info(f"✅ Get completed for '{collection_name}', found {len(query_result)} results")
-        return query_result
+            logger.info(f"✅ Get completed for '{collection_name}' with {len(id_list)} IDs, returning {len(query_results)} QueryResult objects")
+            return query_results
+        else:
+            # Single ID or filters: return single QueryResult
+            # Build WHERE clause from filters
+            where_clause, params = self._build_where_clause(where, where_document, id_list)
+            
+            # Build SQL query
+            sql = f"""
+                SELECT {select_clause}
+                FROM `{table_name}`
+                {where_clause}
+                LIMIT %s OFFSET %s
+            """
+            
+            # Execute query
+            query_params = params + [limit, offset]
+            logger.debug(f"Executing SQL: {sql}")
+            logger.debug(f"Parameters: {query_params}")
+            
+            rows = self._execute_query_with_cursor(conn, sql, query_params, use_context_manager)
+            
+            # Build QueryResult
+            query_result = QueryResult()
+            
+            for row in rows:
+                # Process row
+                processed_row = self._process_get_row(row, include_fields)
+                
+                query_result.add_item(
+                    id=processed_row["id"],
+                    document=processed_row["document"],
+                    embedding=processed_row["embedding"],
+                    metadata=processed_row["metadata"]
+                )
+            
+            logger.info(f"✅ Get completed for '{collection_name}', found {len(query_result)} results")
+            return query_result
     
     def _collection_hybrid_search(
         self,

@@ -181,11 +181,15 @@ class TestCollectionGet:
                 include=["documents", "metadatas"]
             )
             assert results is not None
-            if len(results) > 0:
-                for item in results:
-                    result_dict = item.to_dict() if hasattr(item, 'to_dict') else item
-                    assert '_id' in result_dict
-                    print(f"   Result keys: {list(result_dict.keys())}")
+            assert isinstance(results, list), "Multiple IDs should return List[QueryResult]"
+            assert len(results) == 2, f"Expected 2 QueryResult objects, got {len(results)}"
+            for i, result in enumerate(results):
+                assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                if len(result) > 0:
+                    for item in result:
+                        result_dict = item.to_dict() if hasattr(item, 'to_dict') else item
+                        assert '_id' in result_dict
+                    print(f"   QueryResult {i} keys: {list(result[0].to_dict().keys()) if len(result) > 0 else 'empty'}")
             
             # Test 6: Get all data with limit
             print(f"✅ Testing get all data with limit")
@@ -193,6 +197,26 @@ class TestCollectionGet:
             assert results is not None
             assert len(results) <= 3
             print(f"   Found {len(results)} results (limit=3)")
+            
+            # Test 7: Get by multiple IDs (should return List[QueryResult])
+            print(f"✅ Testing get by multiple IDs (returns List[QueryResult])")
+            if len(inserted_ids) >= 3:
+                results = collection.get(ids=inserted_ids[:3])
+                assert results is not None
+                assert isinstance(results, list), "Multiple IDs should return List[QueryResult]"
+                assert len(results) == 3, f"Expected 3 QueryResult objects, got {len(results)}"
+                for i, result in enumerate(results):
+                    assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                    assert len(result) >= 0, f"QueryResult {i} should exist (may be empty if ID not found)"
+                    print(f"   QueryResult {i} for ID {inserted_ids[i]}: {len(result)} items")
+            
+            # Test 8: Single ID still returns single QueryResult (backward compatibility)
+            print(f"✅ Testing single ID returns single QueryResult (backward compatibility)")
+            results = collection.get(ids=inserted_ids[0])
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Single ID should return QueryResult, not list"
+            assert len(results) == 1
+            print(f"   Single QueryResult with {len(results)} item")
             
         finally:
             # Cleanup
@@ -301,11 +325,45 @@ class TestCollectionGet:
                 include=["documents", "metadatas", "embeddings"]
             )
             assert results is not None
-            if len(results) > 0:
-                for item in results:
-                    result_dict = item.to_dict() if hasattr(item, 'to_dict') else item
-                    assert '_id' in result_dict
-                    print(f"   Result keys: {list(result_dict.keys())}")
+            assert isinstance(results, list), "Multiple IDs should return List[QueryResult]"
+            assert len(results) == 2, f"Expected 2 QueryResult objects, got {len(results)}"
+            for i, result in enumerate(results):
+                assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                if len(result) > 0:
+                    for item in result:
+                        result_dict = item.to_dict() if hasattr(item, 'to_dict') else item
+                        assert '_id' in result_dict
+                    print(f"   QueryResult {i} keys: {list(result[0].to_dict().keys()) if len(result) > 0 else 'empty'}")
+            
+            # Test 9: Get by multiple IDs (should return List[QueryResult])
+            print(f"✅ Testing get by multiple IDs (returns List[QueryResult])")
+            if len(inserted_ids) >= 3:
+                results = collection.get(ids=inserted_ids[:3])
+                assert results is not None
+                assert isinstance(results, list), "Multiple IDs should return List[QueryResult]"
+                assert len(results) == 3, f"Expected 3 QueryResult objects, got {len(results)}"
+                for i, result in enumerate(results):
+                    assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                    assert len(result) >= 0, f"QueryResult {i} should exist (may be empty if ID not found)"
+                    print(f"   QueryResult {i} for ID {inserted_ids[i]}: {len(result)} items")
+            
+            # Test 10: Single ID still returns single QueryResult (backward compatibility)
+            print(f"✅ Testing single ID returns single QueryResult (backward compatibility)")
+            results = collection.get(ids=inserted_ids[0])
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Single ID should return QueryResult, not list"
+            assert len(results) == 1
+            print(f"   Single QueryResult with {len(results)} item")
+            
+            # Test 11: Get with filters still returns single QueryResult (not multiple)
+            print(f"✅ Testing get with filters returns single QueryResult")
+            results = collection.get(
+                where={"category": {"$eq": "AI"}},
+                limit=10
+            )
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Get with filters should return QueryResult, not list"
+            print(f"   Single QueryResult with {len(results)} items matching filter")
             
         finally:
             # Cleanup
@@ -428,11 +486,45 @@ class TestCollectionGet:
                 include=["documents", "metadatas", "embeddings"]
             )
             assert results is not None
-            if len(results) > 0:
-                for item in results:
-                    result_dict = item.to_dict() if hasattr(item, 'to_dict') else item
-                    assert '_id' in result_dict
-                    print(f"   Result keys: {list(result_dict.keys())}")
+            assert isinstance(results, list), "Multiple IDs should return List[QueryResult]"
+            assert len(results) == 2, f"Expected 2 QueryResult objects, got {len(results)}"
+            for i, result in enumerate(results):
+                assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                if len(result) > 0:
+                    for item in result:
+                        result_dict = item.to_dict() if hasattr(item, 'to_dict') else item
+                        assert '_id' in result_dict
+                    print(f"   QueryResult {i} keys: {list(result[0].to_dict().keys()) if len(result) > 0 else 'empty'}")
+            
+            # Test 10: Get by multiple IDs (should return List[QueryResult])
+            print(f"✅ Testing get by multiple IDs (returns List[QueryResult])")
+            if len(inserted_ids) >= 3:
+                results = collection.get(ids=inserted_ids[:3])
+                assert results is not None
+                assert isinstance(results, list), "Multiple IDs should return List[QueryResult]"
+                assert len(results) == 3, f"Expected 3 QueryResult objects, got {len(results)}"
+                for i, result in enumerate(results):
+                    assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                    assert len(result) >= 0, f"QueryResult {i} should exist (may be empty if ID not found)"
+                    print(f"   QueryResult {i} for ID {inserted_ids[i]}: {len(result)} items")
+            
+            # Test 11: Single ID still returns single QueryResult (backward compatibility)
+            print(f"✅ Testing single ID returns single QueryResult (backward compatibility)")
+            results = collection.get(ids=inserted_ids[0])
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Single ID should return QueryResult, not list"
+            assert len(results) == 1
+            print(f"   Single QueryResult with {len(results)} item")
+            
+            # Test 12: Get with filters still returns single QueryResult (not multiple)
+            print(f"✅ Testing get with filters returns single QueryResult")
+            results = collection.get(
+                where={"category": {"$eq": "AI"}},
+                limit=10
+            )
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Get with filters should return QueryResult, not list"
+            print(f"   Single QueryResult with {len(results)} items matching filter")
             
         finally:
             # Cleanup

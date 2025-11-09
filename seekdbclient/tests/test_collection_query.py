@@ -168,6 +168,31 @@ class TestCollectionQuery:
                 for item in results:
                     assert hasattr(item, '_id') or '_id' in item.to_dict()
             
+            # Test 5: Query with multiple vectors (should return List[QueryResult])
+            print(f"✅ Testing query with multiple vectors (returns List[QueryResult])")
+            results = collection.query(
+                query_embeddings=[[1.0, 2.0, 3.0], [2.0, 3.0, 4.0]],
+                n_results=2
+            )
+            assert results is not None
+            assert isinstance(results, list), "Multiple vectors should return List[QueryResult]"
+            assert len(results) == 2, f"Expected 2 QueryResult objects, got {len(results)}"
+            for i, result in enumerate(results):
+                assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                assert len(result) > 0, f"QueryResult {i} should have at least one item"
+                print(f"   QueryResult {i}: {len(result)} items")
+            
+            # Test 6: Single vector still returns single QueryResult (backward compatibility)
+            print(f"✅ Testing single vector returns single QueryResult (backward compatibility)")
+            results = collection.query(
+                query_embeddings=[1.0, 2.0, 3.0],
+                n_results=2
+            )
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Single vector should return QueryResult, not list"
+            assert len(results) > 0
+            print(f"   Single QueryResult with {len(results)} items")
+            
         finally:
             # Cleanup
             try:
@@ -247,6 +272,31 @@ class TestCollectionQuery:
             assert results is not None
             print(f"   Found {len(results)} results with tag in ['ml', 'python']")
             
+            # Test 5: Query with multiple vectors (should return List[QueryResult])
+            print(f"✅ Testing query with multiple vectors (returns List[QueryResult])")
+            results = collection.query(
+                query_embeddings=[[1.0, 2.0, 3.0], [2.0, 3.0, 4.0], [1.1, 2.1, 3.1]],
+                n_results=2
+            )
+            assert results is not None
+            assert isinstance(results, list), "Multiple vectors should return List[QueryResult]"
+            assert len(results) == 3, f"Expected 3 QueryResult objects, got {len(results)}"
+            for i, result in enumerate(results):
+                assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                assert len(result) > 0, f"QueryResult {i} should have at least one item"
+                print(f"   QueryResult {i}: {len(result)} items")
+            
+            # Test 6: Single vector still returns single QueryResult (backward compatibility)
+            print(f"✅ Testing single vector returns single QueryResult (backward compatibility)")
+            results = collection.query(
+                query_embeddings=[1.0, 2.0, 3.0],
+                n_results=2
+            )
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Single vector should return QueryResult, not list"
+            assert len(results) > 0
+            print(f"   Single QueryResult with {len(results)} items")
+            
         finally:
             # Cleanup
             try:
@@ -296,14 +346,19 @@ class TestCollectionQuery:
             assert len(results) > 0
             print(f"   Found {len(results)} results")
             
-            # Test 2: Query with multiple vectors
-            print(f"✅ Testing query with multiple vectors")
+            # Test 2: Query with multiple vectors (should return List[QueryResult])
+            print(f"✅ Testing query with multiple vectors (returns List[QueryResult])")
             results = collection.query(
                 query_embeddings=[[1.0, 2.0, 3.0], [2.0, 3.0, 4.0]],
                 n_results=2
             )
             assert results is not None
-            print(f"   Found {len(results)} results for multiple query vectors")
+            assert isinstance(results, list), "Multiple vectors should return List[QueryResult]"
+            assert len(results) == 2, f"Expected 2 QueryResult objects, got {len(results)}"
+            for i, result in enumerate(results):
+                assert isinstance(result, seekdbclient.QueryResult), f"Result {i} should be QueryResult"
+                assert len(result) > 0, f"QueryResult {i} should have at least one item"
+                print(f"   QueryResult {i}: {len(result)} items")
             
             # Test 3: Query with logical operators
             print(f"✅ Testing query with logical operators ($or)")
@@ -334,6 +389,17 @@ class TestCollectionQuery:
                     result_dict = item.to_dict() if hasattr(item, 'to_dict') else item
                     assert '_id' in result_dict
                     print(f"   Result keys: {list(result_dict.keys())}")
+            
+            # Test 5: Single vector still returns single QueryResult (backward compatibility)
+            print(f"✅ Testing single vector returns single QueryResult (backward compatibility)")
+            results = collection.query(
+                query_embeddings=[1.0, 2.0, 3.0],
+                n_results=2
+            )
+            assert results is not None
+            assert isinstance(results, seekdbclient.QueryResult), "Single vector should return QueryResult, not list"
+            assert len(results) > 0
+            print(f"   Single QueryResult with {len(results)} items")
             
         finally:
             # Cleanup

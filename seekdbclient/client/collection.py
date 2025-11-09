@@ -249,7 +249,7 @@ class Collection:
         where_document: Optional[Dict[str, Any]] = None,
         include: Optional[List[str]] = None,
         **kwargs
-    ) -> QueryResult:
+    ) -> Union[QueryResult, List[QueryResult]]:
         """
         Query collection by vector similarity
         
@@ -269,7 +269,9 @@ class Collection:
             **kwargs: Additional parameters
             
         Returns:
-            QueryResult object containing query results, each item contains:
+            - If single vector/text provided: QueryResult object containing query results
+            - If multiple vectors/texts provided: List of QueryResult objects, one for each query vector
+            Each QueryResult item contains:
             - _id: record ID (always included)
             - document: document text (if included)
             - embedding: vector embedding (if included)
@@ -277,11 +279,18 @@ class Collection:
             - distance: similarity distance (always included for query)
             
         Examples:
-            # Query by embeddings
+            # Query by single embedding (returns QueryResult)
+            results = collection.query(
+                query_embeddings=[0.1, 0.2, 0.3],
+                n_results=5
+            )
+            
+            # Query by multiple embeddings (returns List[QueryResult])
             results = collection.query(
                 query_embeddings=[[11.1, 12.1, 13.1], [1.1, 2.3, 3.2]],
                 n_results=5
             )
+            # results[0] is QueryResult for first vector, results[1] for second vector
             
             # Query with filters
             results = collection.query(
@@ -294,6 +303,12 @@ class Collection:
             # Query by texts (will be embedded automatically)
             results = collection.query(
                 query_texts=["my query text"],
+                n_results=10
+            )
+            
+            # Query by multiple texts (returns List[QueryResult])
+            results = collection.query(
+                query_texts=["text1", "text2"],
                 n_results=10
             )
         """
@@ -318,7 +333,7 @@ class Collection:
         offset: Optional[int] = None,
         include: Optional[List[str]] = None,
         **kwargs
-    ) -> QueryResult:
+    ) -> Union[QueryResult, List[QueryResult]]:
         """
         Get data from collection by IDs or filters
         
@@ -332,16 +347,22 @@ class Collection:
             **kwargs: Additional parameters
             
         Returns:
-            QueryResult object containing get results
+            - If single ID provided: QueryResult object containing get results for that ID
+            - If multiple IDs provided: List of QueryResult objects, one for each ID
+            - If filters provided (no IDs): QueryResult object containing all matching results
             
         Note:
             If no parameters provided, returns all data (up to limit)
             
         Examples:
-            # Get by IDs
-            results = collection.get(ids=["1", "2", "3"])
+            # Get by single ID (returns QueryResult)
+            results = collection.get(ids="1")
             
-            # Get by filter
+            # Get by multiple IDs (returns List[QueryResult])
+            results = collection.get(ids=["1", "2", "3"])
+            # results[0] is QueryResult for ID "1", results[1] for ID "2", etc.
+            
+            # Get by filter (returns QueryResult)
             results = collection.get(
                 where={"tag": "A"},
                 limit=10
