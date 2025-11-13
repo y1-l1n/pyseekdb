@@ -190,7 +190,7 @@ class TestCollectionHybridSearch:
     def test_oceanbase_hybrid_search_full_text_only(self):
         """Test hybrid_search with only full-text search (query)"""
         # Create OceanBase client
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -201,7 +201,7 @@ class TestCollectionHybridSearch:
         
         assert client is not None
         assert hasattr(client, '_server')
-        assert isinstance(client._server, pyseekdb.OceanBaseServerClient)
+        assert isinstance(client._server, pyseekdb.RemoteServerClient)
         
         # Test connection
         try:
@@ -253,7 +253,7 @@ class TestCollectionHybridSearch:
     def test_oceanbase_hybrid_search_vector_only(self):
         """Test hybrid_search with only vector search (knn)"""
         # Create OceanBase client
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -317,7 +317,7 @@ class TestCollectionHybridSearch:
     def test_oceanbase_hybrid_search_combined(self):
         """Test hybrid_search with both full-text and vector search"""
         # Create OceanBase client
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -380,7 +380,7 @@ class TestCollectionHybridSearch:
     def test_oceanbase_hybrid_search_with_metadata_filter(self):
         """Test hybrid_search with metadata filters"""
         # Create OceanBase client
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -459,7 +459,7 @@ class TestCollectionHybridSearch:
     def test_oceanbase_hybrid_search_with_logical_operators(self):
         """Test hybrid_search with logical operators in metadata filters"""
         # Create OceanBase client
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -536,6 +536,7 @@ class TestCollectionHybridSearch:
         client = pyseekdb.Client(
             host=SERVER_HOST,
             port=SERVER_PORT,
+            tenant="sys",  # Default tenant for SeekDB Server
             database=SERVER_DATABASE,
             user=SERVER_USER,
             password=SERVER_PASSWORD
@@ -543,7 +544,7 @@ class TestCollectionHybridSearch:
         
         assert client is not None
         assert hasattr(client, '_server')
-        assert isinstance(client._server, pyseekdb.SeekdbServerClient)
+        assert isinstance(client._server, pyseekdb.RemoteServerClient)
         
         # Test connection
         try:
@@ -598,6 +599,7 @@ class TestCollectionHybridSearch:
         client = pyseekdb.Client(
             host=SERVER_HOST,
             port=SERVER_PORT,
+            tenant="sys",  # Default tenant for SeekDB Server
             database=SERVER_DATABASE,
             user=SERVER_USER,
             password=SERVER_PASSWORD

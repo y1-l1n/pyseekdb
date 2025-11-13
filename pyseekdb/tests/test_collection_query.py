@@ -186,6 +186,17 @@ class TestCollectionQuery:
             assert "ids" in results
             print(f"   Found {len(results['ids'][0])} results containing 'machine learning'")
             
+            # Test 3.5: Query with document filter using regex
+            print(f"✅ Testing query with document filter using regex")
+            results = collection.query(
+                query_embeddings=query_vector,
+                where_document={"$regex": ".*machine.*"},
+                n_results=5
+            )
+            assert results is not None
+            assert "ids" in results
+            print(f"   Found {len(results['ids'][0])} results matching regex '.*machine.*'")
+            
             # Test 4: Query with include parameter
             print(f"✅ Testing query with include parameter")
             results = collection.query(
@@ -245,6 +256,7 @@ class TestCollectionQuery:
         client = pyseekdb.Client(
             host=SERVER_HOST,
             port=SERVER_PORT,
+            tenant="sys",  # Default tenant for SeekDB Server
             database=SERVER_DATABASE,
             user=SERVER_USER,
             password=SERVER_PASSWORD
@@ -252,7 +264,7 @@ class TestCollectionQuery:
         
         assert client is not None
         assert hasattr(client, '_server')
-        assert isinstance(client._server, pyseekdb.SeekdbServerClient)
+        assert isinstance(client._server, pyseekdb.RemoteServerClient)
         
         # Test connection
         try:
@@ -311,6 +323,17 @@ class TestCollectionQuery:
             assert "ids" in results
             print(f"   Found {len(results['ids'][0])} results matching all filters")
             
+            # Test 3.5: Query with document filter using regex
+            print(f"✅ Testing query with document filter using regex")
+            results = collection.query(
+                query_embeddings=query_vector,
+                where_document={"$regex": ".*[Pp]ython.*"},
+                n_results=5
+            )
+            assert results is not None
+            assert "ids" in results
+            print(f"   Found {len(results['ids'][0])} results matching regex '.*[Pp]ython.*'")
+            
             # Test 4: Query with $in operator
             print(f"✅ Testing query with $in operator")
             results = collection.query(
@@ -364,7 +387,7 @@ class TestCollectionQuery:
     def test_oceanbase_collection_query(self):
         """Test collection.query() with OceanBase client"""
         # Create OceanBase client
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -375,7 +398,7 @@ class TestCollectionQuery:
         
         assert client is not None
         assert hasattr(client, '_server')
-        assert isinstance(client._server, pyseekdb.OceanBaseServerClient)
+        assert isinstance(client._server, pyseekdb.RemoteServerClient)
         
         # Test connection
         try:
@@ -442,6 +465,17 @@ class TestCollectionQuery:
             assert results is not None
             assert "ids" in results
             print(f"   Found {len(results['ids'][0])} results with $or condition")
+            
+            # Test 3.5: Query with document filter using regex
+            print(f"✅ Testing query with document filter using regex")
+            results = collection.query(
+                query_embeddings=query_vector,
+                where_document={"$regex": ".*neural.*"},
+                n_results=5
+            )
+            assert results is not None
+            assert "ids" in results
+            print(f"   Found {len(results['ids'][0])} results matching regex '.*neural.*'")
             
             # Test 4: Query with include parameter to get specific fields
             print(f"✅ Testing query with include parameter")

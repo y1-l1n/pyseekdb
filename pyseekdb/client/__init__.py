@@ -4,19 +4,16 @@ SeekDBClient client module
 Provides client and admin factory functions with strict separation:
 
 Collection Management (ClientAPI):
-- Client() - Smart factory for Embedded/Server mode
-- OBClient() - OceanBase client factory
+- Client() - Smart factory for Embedded/Remote Server mode
 - Returns: _ClientProxy (collection operations only)
 
 Database Management (AdminAPI):
-- AdminClient() - Smart factory for Embedded/Server mode  
-- OBAdminClient() - OceanBase admin factory
+- AdminClient() - Smart factory for Embedded/Remote Server mode  
 - Returns: _AdminClientProxy (database operations only)
 
 All factories use the underlying ServerAPI implementations:
 - SeekdbEmbeddedClient - Local seekdb
-- SeekdbServerClient - Remote seekdb via pymysql
-- OceanBaseServerClient - OceanBase via pymysql
+- RemoteServerClient - Remote server via pymysql (supports both SeekDB Server and OceanBase Server)
 """
 import logging
 import os
@@ -36,8 +33,7 @@ from .embedding_function import (
     get_default_embedding_function
 )
 from .client_seekdb_embedded import SeekdbEmbeddedClient
-from .client_seekdb_server import SeekdbServerClient
-from .client_oceanbase_server import OceanBaseServerClient
+from .client_seekdb_server import RemoteServerClient
 from .admin_client import AdminAPI, _AdminClientProxy, _ClientProxy
 from .database import Database
 
@@ -54,13 +50,10 @@ __all__ = [
     'DefaultEmbeddingFunction',
     'get_default_embedding_function',
     'SeekdbEmbeddedClient',
-    'SeekdbServerClient',
-    'OceanBaseServerClient',
+    'RemoteServerClient',
     'Client',
-    'OBClient',
     'AdminAPI',
     'AdminClient',
-    'OBAdminClient',
     'Database',
 ]
 
@@ -69,6 +62,7 @@ def Client(
     path: Optional[str] = None,
     host: Optional[str] = None,
     port: Optional[int] = None,
+    tenant: str = "sys",
     database: str = "test",
     user: Optional[str] = None,
     password: str = "", # Can be retrieved from SEEKDB_PASSWORD environment variable
@@ -77,9 +71,9 @@ def Client(
     """
     Smart client factory function (returns ClientProxy for collection operations only)
     
-    Automatically selects embedded or server mode based on parameters:
+    Automatically selects embedded or remote server mode based on parameters:
     - If path is provided, uses embedded mode
-    - If host/port is provided, uses server mode
+    - If host/port is provided, uses remote server mode (supports both SeekDB Server and OceanBase Server)
     - If neither path nor host is provided, defaults to embedded mode with current working directory as path
     
     Returns a ClientProxy that only exposes collection operations.
@@ -88,11 +82,12 @@ def Client(
     Args:
         path: seekdb data directory path (embedded mode). If not provided and host is also not provided, 
               defaults to current working directory
-        host: server address (server mode)
-        port: server port (server mode)
+        host: server address (remote server mode)
+        port: server port (remote server mode, default 2881)
+        tenant: tenant name (remote server mode, default "sys" for SeekDB Server, "test" for OceanBase)
         database: database name
-        user: username (server mode)
-        password: password (server mode). If not provided, will be retrieved from SEEKDB_PASSWORD environment variable
+        user: username (remote server mode, without tenant suffix)
+        password: password (remote server mode). If not provided, will be retrieved from SEEKDB_PASSWORD environment variable
         **kwargs: other parameters
     
     Returns:
@@ -107,12 +102,23 @@ def Client(
         >>> client = Client(database="db1")
         >>> client.create_collection("my_collection")  # ✅ Available
         
-        >>> # Server mode
+        >>> # Remote server mode (SeekDB Server)
         >>> client = Client(
         ...     host='localhost',
-        ...     port=2882,
+        ...     port=2881,
+        ...     tenant="sys",
         ...     database="db1",
-        ...     user="u01",
+        ...     user="root",
+        ...     password="pass"
+        ... )
+        
+        >>> # Remote server mode (OceanBase Server)
+        >>> client = Client(
+        ...     host='localhost',
+        ...     port=2881,
+        ...     tenant="test",
+        ...     database="db1",
+        ...     user="root",
         ...     password="pass"
         ... )
     """
@@ -131,18 +137,19 @@ def Client(
         )
     
     elif host is not None:
-        # Server mode
+        # Remote server mode (supports both SeekDB Server and OceanBase Server)
         if port is None:
-            port = 2882  # Default port
+            port = 2881  # Default port
         if user is None:
             user = "root"
         
         logger.info(
-            f"Creating server mode client: {user}@{host}:{port}/{database}"
+            f"Creating remote server client: {user}@{tenant}@{host}:{port}/{database}"
         )
-        server = SeekdbServerClient(
+        server = RemoteServerClient(
             host=host,
             port=port,
+            tenant=tenant,
             database=database,
             user=user,
             password=password,
@@ -163,71 +170,11 @@ def Client(
     return _ClientProxy(server=server)
 
 
-def OBClient(
-    host: str = "localhost",
-    port: int = 2881,
-    tenant: str = "test",
-    database: str = "test",
-    user: str = "root",
-    password: str = "", # Can be retrieved from OB_PASSWORD environment variable
-    **kwargs
-) -> _ClientProxy:
-    """
-    OceanBase client factory function (returns ClientProxy for collection operations only)
-    
-    Returns a ClientProxy that only exposes collection operations.
-    For database management, use OBAdminClient().
-    
-    Args:
-        host: server address
-        port: server port (default 2881)
-        tenant: tenant name
-        database: database name
-        user: username (without tenant suffix)
-        password: password. If not provided, will be retrieved from OB_PASSWORD environment variable
-        **kwargs: other parameters
-    
-    Returns:
-        _ClientProxy: A proxy that only exposes collection operations
-    
-    Examples:
-        >>> client = OBClient(
-        ...     host='localhost',
-        ...     port=2881,
-        ...     tenant="tenant1",
-        ...     database="db1",
-        ...     user="u01",
-        ...     password="pass"
-        ... )
-        >>> client.create_collection("my_collection")  # ✅ Available
-        >>> # client.create_database("new_db")  # ❌ Not available
-    """
-    # Get password from environment variable if not provided
-    if not password:
-        password = os.environ.get("OB_PASSWORD", "")
-    
-    logger.info(
-        f"Creating OceanBase client: {user}@{tenant}@{host}:{port}/{database}"
-    )
-    
-    server = OceanBaseServerClient(
-        host=host,
-        port=port,
-        tenant=tenant,
-        database=database,
-        user=user,
-        password=password,
-        **kwargs
-    )
-    
-    # Return ClientProxy (only exposes collection operations)
-    return _ClientProxy(server=server)
-
-
 def AdminClient(
     path: Optional[str] = None,
     host: Optional[str] = None,
     port: Optional[int] = None,
+    tenant: str = "sys",
     user: Optional[str] = None,
     password: str = "", # Can be retrieved from SEEKDB_PASSWORD environment variable
     **kwargs
@@ -235,19 +182,20 @@ def AdminClient(
     """
     Smart admin client factory function (proxy pattern)
     
-    Automatically selects embedded or server mode based on parameters:
+    Automatically selects embedded or remote server mode based on parameters:
     - If path is provided, uses embedded mode
-    - If host/port is provided, uses server mode
+    - If host/port is provided, uses remote server mode (supports both SeekDB Server and OceanBase Server)
     
     Returns a lightweight AdminClient proxy that only exposes database operations.
     For collection management, use Client().
     
     Args:
         path: seekdb data directory path (embedded mode)
-        host: server address (server mode)
-        port: server port (server mode)
-        user: username (server mode)
-        password: password (server mode). If not provided, will be retrieved from SEEKDB_PASSWORD environment variable
+        host: server address (remote server mode)
+        port: server port (remote server mode, default 2881)
+        tenant: tenant name (remote server mode, default "sys" for SeekDB Server, "test" for OceanBase)
+        user: username (remote server mode, without tenant suffix)
+        password: password (remote server mode). If not provided, will be retrieved from SEEKDB_PASSWORD environment variable
         **kwargs: other parameters
     
     Returns:
@@ -259,10 +207,20 @@ def AdminClient(
         >>> admin.create_database("new_db")  # ✅ Available
         >>> # admin.create_collection("coll")  # ❌ Not available
         
-        >>> # Server mode
+        >>> # Remote server mode (SeekDB Server)
         >>> admin = AdminClient(
         ...     host='localhost',
-        ...     port=2882,
+        ...     port=2881,
+        ...     tenant="sys",
+        ...     user="root",
+        ...     password="pass"
+        ... )
+        
+        >>> # Remote server mode (OceanBase Server)
+        >>> admin = AdminClient(
+        ...     host='localhost',
+        ...     port=2881,
+        ...     tenant="test",
         ...     user="root",
         ...     password="pass"
         ... )
@@ -282,18 +240,19 @@ def AdminClient(
         )
     
     elif host is not None:
-        # Server mode
+        # Remote server mode (supports both SeekDB Server and OceanBase Server)
         if port is None:
-            port = 2882  # Default port
+            port = 2881  # Default port
         if user is None:
             user = "root"
         
         logger.info(
-            f"Creating server mode admin client: {user}@{host}:{port}"
+            f"Creating remote server admin client: {user}@{tenant}@{host}:{port}"
         )
-        server = SeekdbServerClient(
+        server = RemoteServerClient(
             host=host,
             port=port,
+            tenant=tenant,
             database="information_schema",  # Use system database
             user=user,
             password=password,
@@ -302,67 +261,11 @@ def AdminClient(
     
     else:
         raise ValueError(
-            "Must provide either path (embedded mode) or host (server mode) parameter"
+            "Must provide either path (embedded mode) or host (remote server mode) parameter"
         )
     
     # Return AdminClient proxy (only exposes database operations)
     return _AdminClientProxy(server=server)
 
 
-def OBAdminClient(
-    host: str = "localhost",
-    port: int = 2881,
-    tenant: str = "test",
-    user: str = "root",
-    password: str = "", # Can be retrieved from OB_PASSWORD environment variable
-    **kwargs
-) -> _AdminClientProxy:
-    """
-    OceanBase admin client factory function (proxy pattern)
-    
-    Returns a lightweight AdminClient proxy that only exposes database operations.
-    For collection management, use OBClient().
-    
-    Args:
-        host: server address
-        port: server port (default 2881)
-        tenant: tenant name
-        user: username (without tenant suffix)
-        password: password. If not provided, will be retrieved from OB_PASSWORD environment variable
-        **kwargs: other parameters
-    
-    Returns:
-        _AdminClientProxy: A proxy that only exposes database operations
-    
-    Examples:
-        >>> admin = OBAdminClient(
-        ...     host='localhost',
-        ...     port=2881,
-        ...     tenant="tenant1",
-        ...     user="root",
-        ...     password="pass"
-        ... )
-        >>> admin.create_database("new_db")  # ✅ Available
-        >>> # admin.create_collection("coll")  # ❌ Not available
-    """
-    # Get password from environment variable if not provided
-    if not password:
-        password = os.environ.get("OB_PASSWORD", "")
-    
-    logger.info(
-        f"Creating OceanBase admin client: {user}@{tenant}@{host}:{port}"
-    )
-    
-    server = OceanBaseServerClient(
-        host=host,
-        port=port,
-        tenant=tenant,
-        database="information_schema",  # Use system database
-        user=user,
-        password=password,
-        **kwargs
-    )
-    
-    # Return AdminClient proxy (only exposes database operations)
-    return _AdminClientProxy(server=server)
 

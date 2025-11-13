@@ -293,7 +293,7 @@ class TestDefaultEmbeddingFunction:
             pytest.skip("sentence-transformers is not installed. Install with: pip install sentence-transformers")
         
         # Create OceanBase client
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,

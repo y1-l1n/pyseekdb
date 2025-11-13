@@ -47,19 +47,30 @@ rows = client.execute("SELECT 1")
 print(rows)
 ```
 
-### 1.2 Remote SeekDB Server Client
+### 1.2 Remote Server Client
 
-Connect to a remote SeekDB server:
+Connect to a remote server (supports both SeekDB Server and OceanBase Server):
 
 ```python
 import pyseekdb
 
-# Create server client
+# Create remote server client (SeekDB Server)
 client = pyseekdb.Client(
     host="127.0.0.1",      # Server host
     port=2881,              # Server port (default: 2881)
+    tenant="sys",          # Tenant name (default: "sys" for SeekDB Server)
     database="demo",        # Database name
     user="root",            # Username (default: "root")
+    password=""             # Password (can be retrieved from SEEKDB_PASSWORD environment variable)
+)
+
+# Create remote server client (OceanBase Server)
+client = pyseekdb.Client(
+    host="127.0.0.1",      # Server host
+    port=2881,              # Server port (default: 2881)
+    tenant="test",         # Tenant name
+    database="demo",       # Database name
+    user="root",           # Username (default: "root")
     password=""             # Password (can be retrieved from SEEKDB_PASSWORD environment variable)
 )
 ```
@@ -75,45 +86,10 @@ export SEEKDB_PASSWORD="your_password"
 client = pyseekdb.Client(
     host="127.0.0.1",
     port=2881,
+    tenant="sys",  # or "test" for OceanBase
     database="demo",
     user="root"
     # password parameter omitted - will use SEEKDB_PASSWORD from environment
-)
-```
-
-### 1.3 OceanBase Client
-
-Connect to OceanBase database:
-
-```python
-import pyseekdb
-
-# Create OceanBase client
-client = pyseekdb.Client(
-    host="127.0.0.1",       # Server host
-    port=11402,             # OceanBase port
-    tenant="mysql",         # Tenant name
-    database="test",        # Database name
-    user="root",            # Username
-    password=""             # Password (can be retrieved from OB_PASSWORD environment variable)
-)
-```
-
-**Note:** If the `password` parameter is not provided (empty string), the client will automatically retrieve it from the `OB_PASSWORD` environment variable. This is useful for keeping passwords out of your code:
-
-```bash
-export OB_PASSWORD="your_password"
-```
-
-```python
-# Password will be automatically retrieved from OB_PASSWORD environment variable
-client = pyseekdb.OBClient(
-    host="127.0.0.1",
-    port=11402,
-    tenant="mysql",
-    database="test",
-    user="root"
-    # password parameter omitted - will use OB_PASSWORD from environment
 )
 ```
 
@@ -121,10 +97,6 @@ client = pyseekdb.OBClient(
 
 | Method / Property     | Description                                                    |
 |-----------------------|----------------------------------------------------------------|
-| `execute(sql)`        | Execute SQL statement and return cursor results (commits automatically when needed) |
-| `is_connected()`      | Check whether an underlying connection is active               |
-| `get_raw_connection()`| Access the underlying seekdb / pymysql connection             |
-| `mode`                | Returns the concrete client class name (`SeekdbEmbeddedClient`, `SeekdbServerClient`, or `OceanBaseServerClient`) |
 | `create_collection()`  | Create a new collection (see Collection Management)            |
 | `get_collection()`    | Get an existing collection object                              |
 | `delete_collection()` | Delete a collection                                            |
@@ -147,16 +119,26 @@ import pyseekdb
 # Embedded mode - Database management
 admin = pyseekdb.AdminClient(path="./seekdb")
 
-# Server mode - Database management
+# Remote server mode - Database management (SeekDB Server)
 admin = pyseekdb.AdminClient(
     host="127.0.0.1",
     port=2881,
+    tenant="sys",  # Default tenant for SeekDB Server
+    user="root",
+    password=""  # Can be retrieved from SEEKDB_PASSWORD environment variable
+)
+
+# Remote server mode - Database management (OceanBase Server)
+admin = pyseekdb.AdminClient(
+    host="127.0.0.1",
+    port=2881,
+    tenant="test",  # Default tenant for OceanBase
     user="root",
     password=""  # Can be retrieved from SEEKDB_PASSWORD environment variable
 )
 
 # Use context manager
-with pyseekdb.AdminClient(host="127.0.0.1", port=2881, user="root") as admin:
+with pyseekdb.AdminClient(host="127.0.0.1", port=2881, tenant="sys", user="root") as admin:
     # Create database
     admin.create_database("my_database")
     
@@ -173,60 +155,21 @@ with pyseekdb.AdminClient(host="127.0.0.1", port=2881, user="root") as admin:
     admin.delete_database("my_database")
 ```
 
-### 2.2 OceanBase AdminClient
 
-```python
-import pyseekdb
-
-# OceanBase mode - Database management (multi-tenant)
-admin = pyseekdb.OBAdminClient(
-    host="127.0.0.1",
-    port=11402,
-    tenant="mysql",        # Tenant name
-    user="root",
-    password=""  # Can be retrieved from OB_PASSWORD environment variable
-)
-
-# Use context manager
-with pyseekdb.OBAdminClient(
-    host="127.0.0.1",
-    port=11402,
-    tenant="mysql",
-    user="root"
-) as admin:
-    # Create database in tenant
-    admin.create_database("analytics", tenant="mysql")
-    
-    # List databases in tenant
-    databases = admin.list_databases(tenant="mysql")
-    for db in databases:
-        print(f"Database: {db.name}, Tenant: {db.tenant}")
-    
-    # Get database
-    db = admin.get_database("analytics", tenant="mysql")
-    
-    # Delete database
-    admin.delete_database("analytics", tenant="mysql")
-```
-
-### 2.3 AdminClient Methods
+### 2.2 AdminClient Methods
 
 | Method                    | Description                                        |
 |---------------------------|----------------------------------------------------|
-| `create_database(name, tenant=DEFAULT_TENANT)` | Create a new database (tenant ignored for embedded/server mode) |
-| `get_database(name, tenant=DEFAULT_TENANT)`    | Get database object with metadata (tenant ignored for embedded/server mode) |
-| `delete_database(name, tenant=DEFAULT_TENANT)`  | Delete a database (tenant ignored for embedded/server mode) |
-| `list_databases(limit=None, offset=None, tenant=DEFAULT_TENANT)` | List all databases with optional pagination (tenant ignored for embedded/server mode) |
+| `create_database(name, tenant=DEFAULT_TENANT)` | Create a new database (uses client's tenant for remote server mode) |
+| `get_database(name, tenant=DEFAULT_TENANT)`    | Get database object with metadata (uses client's tenant for remote server mode) |
+| `delete_database(name, tenant=DEFAULT_TENANT)`  | Delete a database (uses client's tenant for remote server mode) |
+| `list_databases(limit=None, offset=None, tenant=DEFAULT_TENANT)` | List all databases with optional pagination (uses client's tenant for remote server mode) |
 
 **Parameters:**
 - `name` (str): Database name
-- `tenant` (str, optional): Tenant name (required for OceanBase, ignored for embedded/server mode)
+- `tenant` (str, optional): Tenant name (uses client's tenant if different, ignored for embedded mode)
 - `limit` (int, optional): Maximum number of results to return
 - `offset` (int, optional): Number of results to skip for pagination
-
-**Note:** 
-- Embedded/Server mode: No tenant concept (tenant=None in Database objects)
-- OceanBase mode: Multi-tenant architecture (tenant is set in Database objects)
 
 ### 2.4 Database Object
 
@@ -1383,15 +1326,11 @@ python3 -m pytest pyseekdb/tests/test_client_creation.py -v
 
 For security purposes, you can set passwords via environment variables instead of passing them directly in code:
 
-- **`SEEKDB_PASSWORD`**: Password for SeekDB server connections (used by `Client()` and `AdminClient()` when `password` parameter is not provided or is empty)
-- **`OB_PASSWORD`**: Password for OceanBase connections (used by `OBClient()` and `OBAdminClient()` when `password` parameter is not provided or is empty)
+- **`SEEKDB_PASSWORD`**: Password for remote server connections (used by `Client()` and `AdminClient()` when `password` parameter is not provided or is empty). Works for both SeekDB Server and OceanBase Server.
 
 ```bash
-# Set password for SeekDB server connections
-export SEEKDB_PASSWORD="your_seekdb_password"
-
-# Set password for OceanBase connections
-export OB_PASSWORD="your_oceanbase_password"
+# Set password for remote server connections (SeekDB Server or OceanBase Server)
+export SEEKDB_PASSWORD="your_password"
 ```
 
 #### Test Configuration Environment Variables
@@ -1406,10 +1345,10 @@ export SERVER_PORT=2881           # SeekDB Server port
 export SERVER_USER=root
 export SERVER_PASSWORD=secret
 export OB_HOST=127.0.0.1
-export OB_PORT=11402               # OceanBase port
-export OB_TENANT=mysql             # OceanBase tenant
+export OB_PORT=2881                # OceanBase port (same as SeekDB Server)
+export OB_TENANT=test              # OceanBase tenant
 export OB_USER=root
-export OB_PASSWORD=
+export OB_PASSWORD=                # Uses SEEKDB_PASSWORD if not set
 ```
 
 ## Architecture

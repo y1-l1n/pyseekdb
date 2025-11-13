@@ -57,7 +57,7 @@ class BaseConnection(ABC):
     @property
     @abstractmethod
     def mode(self) -> str:
-        """Return client mode (e.g., 'SeekdbEmbeddedClient', 'SeekdbServerClient', 'OceanBaseServerClient')"""
+        """Return client mode (e.g., 'SeekdbEmbeddedClient', 'RemoteServerClient')"""
         pass
     
     # ==================== Context Manager ====================

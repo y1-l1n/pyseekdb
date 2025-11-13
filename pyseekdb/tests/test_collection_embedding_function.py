@@ -472,7 +472,7 @@ class TestCollectionEmbeddingFunction:
     
     def test_oceanbase_client(self):
         """Test with OceanBase client"""
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,

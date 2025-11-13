@@ -330,6 +330,7 @@ class TestClientCreation:
         client = pyseekdb.Client(
             host=SERVER_HOST,
             port=SERVER_PORT,
+            tenant="sys",  # Default tenant for SeekDB Server
             database=SERVER_DATABASE,
             user=SERVER_USER,
             password=SERVER_PASSWORD
@@ -338,8 +339,8 @@ class TestClientCreation:
         # Verify client type and properties
         assert client is not None
         assert hasattr(client, '_server')
-        assert isinstance(client._server, pyseekdb.SeekdbServerClient)
-        assert client._server.mode == "SeekdbServerClient"
+        assert isinstance(client._server, pyseekdb.RemoteServerClient)
+        assert client._server.mode == "RemoteServerClient"
         assert client._server.host == SERVER_HOST
         assert client._server.port == SERVER_PORT
         assert client._server.database == SERVER_DATABASE
@@ -373,7 +374,7 @@ class TestClientCreation:
     def test_create_oceanbase_client(self):
         """Test creating OceanBase client (lazy loading) and executing queries"""
         # Create client (returns _ClientProxy)
-        client = pyseekdb.OBClient(
+        client = pyseekdb.Client(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -385,8 +386,8 @@ class TestClientCreation:
         # Verify client type and properties
         assert client is not None
         assert hasattr(client, '_server')
-        assert isinstance(client._server, pyseekdb.OceanBaseServerClient)
-        assert client._server.mode == "OceanBaseServerClient"
+        assert isinstance(client._server, pyseekdb.RemoteServerClient)
+        assert client._server.mode == "RemoteServerClient"
         assert client._server.host == OB_HOST
         assert client._server.port == OB_PORT
         assert client._server.tenant == OB_TENANT

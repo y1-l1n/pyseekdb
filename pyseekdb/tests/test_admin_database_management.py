@@ -139,6 +139,7 @@ class TestAdminDatabaseManagement:
         admin = pyseekdb.AdminClient(
             host=SERVER_HOST,
             port=SERVER_PORT,
+            tenant="sys",  # Default tenant for SeekDB Server
             user=SERVER_USER,
             password=SERVER_PASSWORD
         )
@@ -146,7 +147,7 @@ class TestAdminDatabaseManagement:
         # Verify admin client type
         assert admin is not None
         assert hasattr(admin, '_server')
-        assert isinstance(admin._server, pyseekdb.SeekdbServerClient)
+        assert isinstance(admin._server, pyseekdb.RemoteServerClient)
         
         # Test database operations
         test_db_name = "test_server_db"
@@ -172,7 +173,7 @@ class TestAdminDatabaseManagement:
             db = admin.get_database(test_db_name)
             assert db is not None
             assert db.name == test_db_name
-            assert db.tenant is None  # Server mode has no tenant
+            assert db.tenant == "sys"  # Server mode has tenant (default "sys")
             print(f"   ✅ Database retrieved: {db.name}")
             print(f"      - Name: {db.name}")
             print(f"      - Tenant: {db.tenant}")
@@ -208,7 +209,7 @@ class TestAdminDatabaseManagement:
     def test_oceanbase_admin_database_operations(self):
         """Test OceanBase admin client database management: create, get, list, delete"""
         # Create admin client (returns _AdminClientProxy)
-        admin = pyseekdb.OBAdminClient(
+        admin = pyseekdb.AdminClient(
             host=OB_HOST,
             port=OB_PORT,
             tenant=OB_TENANT,
@@ -219,7 +220,7 @@ class TestAdminDatabaseManagement:
         # Verify admin client type
         assert admin is not None
         assert hasattr(admin, '_server')
-        assert isinstance(admin._server, pyseekdb.OceanBaseServerClient)
+        assert isinstance(admin._server, pyseekdb.RemoteServerClient)
         assert admin._server.tenant == OB_TENANT
         
         # Test database operations

@@ -34,11 +34,11 @@ client = pyseekdb.Client(
 #     password=""
 # )
 
-# Option 3: OceanBase mode
-# ob_client = pyseekdb.OBClient(
+# Option 3: Remote server mode (OceanBase Server)
+# client = pyseekdb.Client(
 #     host="127.0.0.1",
-#     port=11402,
-#     tenant="mysql",
+#     port=2881,
+#     tenant="test",  # OceanBase default tenant
 #     database="test",
 #     user="root",
 #     password=""

@@ -3,10 +3,9 @@ SeekDBClient - Unified vector database client wrapper
 
 Based on seekdb and pymysql, providing a simple and unified API.
 
-Supports three modes:
+Supports two modes:
 1. Embedded mode - using local seekdb
-2. Server mode - connecting to remote seekdb via pymysql
-3. OceanBase mode - connecting to OceanBase via pymysql
+2. Remote server mode - connecting to remote server via pymysql (supports both SeekDB Server and OceanBase Server)
 
 Examples:
     >>> import pyseekdb
@@ -14,23 +13,24 @@ Examples:
     >>> # Embedded mode - Collection management
     >>> client = pyseekdb.Client(path="./seekdb", database="test")
 
-    >>> # Server mode - Collection management
+    >>> # Remote server mode (SeekDB Server) - Collection management
     >>> client = pyseekdb.Client(
     ...     host='localhost',
     ...     port=2881,
+    ...     tenant="sys",
     ...     database="test",
     ...     user="root",
     ...     password="pass"
     ... )
 
-    >>> # OceanBase mode - Collection management
-    >>> ob_client = pyseekdb.OBClient(
+    >>> # Remote server mode (OceanBase Server) - Collection management
+    >>> client = pyseekdb.Client(
     ...     host='localhost',
     ...     port=2881,
     ...     tenant="test",
     ...     database="test",
     ...     user="root",
-    ...     password=""
+    ...     password="pass"
     ... )
 
     >>> # Admin client - Database management
@@ -51,13 +51,10 @@ from .client import (
     DefaultEmbeddingFunction,
     get_default_embedding_function,
     SeekdbEmbeddedClient,
-    SeekdbServerClient,
-    OceanBaseServerClient,
+    RemoteServerClient,
     Client,
-    OBClient,
     AdminAPI,
     AdminClient,
-    OBAdminClient,
     Database,
 )
 from .client.collection import Collection
@@ -80,14 +77,11 @@ __all__ = [
     'DefaultEmbeddingFunction',
     'get_default_embedding_function',
     'SeekdbEmbeddedClient',
-    'SeekdbServerClient',
-    'OceanBaseServerClient',
+    'RemoteServerClient',
     'Client',
-    'OBClient',
     'Collection',
     'AdminAPI',
     'AdminClient',
-    'OBAdminClient',
     'Database',
 ]
 
