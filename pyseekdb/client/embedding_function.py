@@ -138,7 +138,7 @@ class DefaultEmbeddingFunction:
         """
         logger.info(f"Downloading from {url}")
         # Use Client to ensure correct handling of redirects
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+        with httpx.Client(timeout=600.0, follow_redirects=True) as client:
             with client.stream("GET", url) as resp:
                 resp.raise_for_status()
                 total = int(resp.headers.get("content-length", 0))
