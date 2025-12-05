@@ -82,7 +82,7 @@ class TestCollectionHybridSearch:
             return extended[:dimension]
     
     def _insert_test_data(self, client, collection_name: str, dimension: int = 3):
-        """Helper method to insert test data via SQL
+        """Helper method to insert test data via SQL and return inserted IDs
         
         Args:
             client: Client instance
@@ -148,9 +148,11 @@ class TestCollectionHybridSearch:
             }
         ]
         
+        inserted_ids = []
         for data in test_data:
             # Generate UUID for _id (use string format directly)
             id_str = str(uuid.uuid4())
+            inserted_ids.append(id_str)
             # Escape single quotes in ID
             id_str_escaped = id_str.replace("'", "''")
             
@@ -177,6 +179,7 @@ class TestCollectionHybridSearch:
             client._server.execute(sql)
         
         print(f"   Inserted {len(test_data)} test records (dimension={dimension})")
+        return inserted_ids
     
     def _cleanup_collection(self, client, collection_name: str):
         """Helper method to cleanup test collection"""
@@ -552,6 +555,77 @@ class TestCollectionHybridSearch:
             # Cleanup
             self._cleanup_collection(client, collection_name)
     
+    def test_oceanbase_hybrid_search_scalar_in_nin_and_id(self):
+        """Test hybrid_search scalar filters with $in/$nin and #id support"""
+        client = pyseekdb.Client(
+            host=OB_HOST,
+            port=OB_PORT,
+            tenant=OB_TENANT,
+            database=OB_DATABASE,
+            user=OB_USER,
+            password=OB_PASSWORD
+        )
+        
+        try:
+            result = client._server.execute("SELECT 1 as test")
+            assert result is not None
+        except Exception as e:
+            pytest.fail(f"OceanBase connection failed ({OB_HOST}:{OB_PORT}): {e}")
+        
+        collection_name = f"test_hybrid_search_{int(time.time())}"
+        collection, actual_dimension = self._create_test_collection(client, collection_name)
+        
+        try:
+            inserted_ids = self._insert_test_data(client, collection_name, dimension=actual_dimension)
+            time.sleep(1)
+            
+            results_in = collection.hybrid_search(
+                query={
+                    "where": {
+                        "tag": {"$in": ["ml", "python"]}
+                    },
+                    "n_results": 10
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_in and results_in.get("metadatas")
+            for metadata in results_in["metadatas"][0]:
+                if metadata:
+                    assert metadata.get("tag") in ["ml", "python"]
+            
+            results_nin = collection.hybrid_search(
+                query={
+                    "where": {
+                        "tag": {"$nin": ["ml", "python"]}
+                    },
+                    "n_results": 10
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_nin and results_nin.get("metadatas")
+            for metadata in results_nin["metadatas"][0]:
+                if metadata:
+                    assert metadata.get("tag") not in ["ml", "python"]
+            
+            target_id = inserted_ids[0]
+            results_id = collection.hybrid_search(
+                query={
+                    "where": {
+                        "#id": {"$in": [target_id]}
+                    },
+                    "n_results": 5
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_id and results_id.get("ids") and len(results_id["ids"][0]) > 0
+            assert target_id in results_id["ids"][0]
+        
+        finally:
+            self._cleanup_collection(client, collection_name)
+    
     def test_seekdb_server_hybrid_search_full_text_only(self):
         """Test hybrid_search with only full-text search (query) using SeekdbServer"""
         # Create SeekdbServer client
@@ -902,6 +976,142 @@ class TestCollectionHybridSearch:
             
         finally:
             # Cleanup
+            self._cleanup_collection(client, collection_name)
+
+    def test_embedded_hybrid_search_scalar_in_nin_and_id(self):
+        """Test hybrid_search scalar $in/$nin and #id support using SeekdbEmbedded"""
+        try:
+            import pylibseekdb  # noqa: F401
+        except ImportError:
+            pytest.fail("seekdb embedded package is not installed")
+        
+        client = pyseekdb.Client(
+            path=SEEKDB_PATH,
+            database=SEEKDB_DATABASE
+        )
+        
+        collection_name = f"test_hybrid_search_{int(time.time())}"
+        collection, actual_dimension = self._create_test_collection(client, collection_name)
+        
+        try:
+            inserted_ids = self._insert_test_data(client, collection_name, dimension=actual_dimension)
+            time.sleep(1)
+            
+            results_in = collection.hybrid_search(
+                query={
+                    "where": {
+                        "tag": {"$in": ["ml", "python"]}
+                    },
+                    "n_results": 10
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_in and results_in.get("metadatas")
+            for metadata in results_in["metadatas"][0]:
+                if metadata:
+                    assert metadata.get("tag") in ["ml", "python"]
+            
+            results_nin = collection.hybrid_search(
+                query={
+                    "where": {
+                        "tag": {"$nin": ["ml", "python"]}
+                    },
+                    "n_results": 10
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_nin and results_nin.get("metadatas")
+            for metadata in results_nin["metadatas"][0]:
+                if metadata:
+                    assert metadata.get("tag") not in ["ml", "python"]
+            
+            target_id = inserted_ids[0]
+            results_id = collection.hybrid_search(
+                query={
+                    "where": {
+                        "#id": {"$in": [target_id]}
+                    },
+                    "n_results": 5
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_id and results_id.get("ids") and len(results_id["ids"][0]) > 0
+            assert target_id in results_id["ids"][0]
+        
+        finally:
+            self._cleanup_collection(client, collection_name)
+
+    def test_seekdb_server_hybrid_search_scalar_in_nin_and_id(self):
+        """Test hybrid_search scalar $in/$nin and #id support using SeekdbServer"""
+        client = pyseekdb.Client(
+            host=SERVER_HOST,
+            port=SERVER_PORT,
+            database=SERVER_DATABASE,
+            user=SERVER_USER,
+            password=SERVER_PASSWORD
+        )
+        
+        try:
+            result = client._server.execute("SELECT 1 as test")
+            assert result is not None
+        except Exception as e:
+            pytest.fail(f"SeekdbServer connection failed ({SERVER_HOST}:{SERVER_PORT}): {e}")
+        
+        collection_name = f"test_hybrid_search_{int(time.time())}"
+        collection, actual_dimension = self._create_test_collection(client, collection_name)
+        
+        try:
+            inserted_ids = self._insert_test_data(client, collection_name, dimension=actual_dimension)
+            time.sleep(1)
+            
+            results_in = collection.hybrid_search(
+                query={
+                    "where": {
+                        "tag": {"$in": ["ml", "python"]}
+                    },
+                    "n_results": 10
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_in and results_in.get("metadatas")
+            for metadata in results_in["metadatas"][0]:
+                if metadata:
+                    assert metadata.get("tag") in ["ml", "python"]
+            
+            results_nin = collection.hybrid_search(
+                query={
+                    "where": {
+                        "tag": {"$nin": ["ml", "python"]}
+                    },
+                    "n_results": 10
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_nin and results_nin.get("metadatas")
+            for metadata in results_nin["metadatas"][0]:
+                if metadata:
+                    assert metadata.get("tag") not in ["ml", "python"]
+            
+            target_id = inserted_ids[0]
+            results_id = collection.hybrid_search(
+                query={
+                    "where": {
+                        "#id": {"$in": [target_id]}
+                    },
+                    "n_results": 5
+                },
+                n_results=5,
+                include=["metadatas"]
+            )
+            assert results_id and results_id.get("ids") and len(results_id["ids"][0]) > 0
+            assert target_id in results_id["ids"][0]
+        
+        finally:
             self._cleanup_collection(client, collection_name)
 
 

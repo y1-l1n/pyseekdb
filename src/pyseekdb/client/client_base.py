@@ -1352,6 +1352,9 @@ class BaseClient(BaseConnection, AdminAPI):
         Returns:
             String ID
         """
+        if record_id is None:
+            return None
+        
         # If it's already a string, return as is
         if isinstance(record_id, str):
             return record_id
@@ -1944,16 +1947,10 @@ class BaseClient(BaseConnection, AdminAPI):
                 # If only one filter condition, check its type
                 if len(filter_conditions) == 1:
                     filter_cond = filter_conditions[0]
-                    # Check if it's a range query
-                    if "range" in filter_cond:
-                        return {"range": filter_cond["range"]}
-                    # Check if it's a term query
-                    elif "term" in filter_cond:
-                        return {"term": filter_cond["term"]}
-                    # Otherwise, it's a bool query, wrap in filter
-                    else:
-                        return {"bool": {"filter": filter_conditions}}
-                # Multiple filter conditions, wrap in bool
+                    # Directly return supported single condition types
+                    if any(key in filter_cond for key in ("range", "term", "terms", "bool")):
+                        return filter_cond
+                # Multiple filter conditions, wrap in bool filter
                 return {"bool": {"filter": filter_conditions}}
         
         # Case 2: Full-text search (with or without metadata filtering)
@@ -2098,6 +2095,15 @@ class BaseClient(BaseConnection, AdminAPI):
             return []
         
         return self._build_metadata_filter_conditions(where)
+
+    def _build_search_parm_field_name(self, key: str) -> str:
+        """
+        Build field name used in search_parm filters.
+        Supports special "#id" to refer to the primary key column directly.
+        """
+        if key == "#id" or key == CollectionFieldNames.ID:
+            return CollectionFieldNames.ID
+        return f"(JSON_EXTRACT(metadata, '$.{key}'))"
     
     def _build_metadata_filter_conditions(self, condition: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -2144,8 +2150,8 @@ class BaseClient(BaseConnection, AdminAPI):
             if key in ["$and", "$or", "$not"]:
                 continue
             
-            # Build field name with JSON_EXTRACT format
-            field_name = f"(JSON_EXTRACT(metadata, '$.{key}'))"
+            # Build field name with JSON_EXTRACT format (or _id for special key)
+            field_name = self._build_search_parm_field_name(key)
             
             if isinstance(value, dict):
                 # Handle comparison operators
@@ -2167,15 +2173,13 @@ class BaseClient(BaseConnection, AdminAPI):
                     elif op == "$gte":
                         range_conditions["gte"] = op_value
                     elif op == "$in":
-                        # For $in, create multiple term queries wrapped in should
-                        in_conditions = [{"term": {field_name: val}} for val in op_value]
-                        if in_conditions:
-                            result.append({"bool": {"should": in_conditions}})
+                        # For $in, use terms query to match any value in list
+                        if isinstance(op_value, (list, tuple)) and len(op_value) > 0:
+                            result.append({"terms": {field_name: list(op_value)}})
                     elif op == "$nin":
-                        # For $nin, create multiple term queries wrapped in must_not
-                        nin_conditions = [{"term": {field_name: val}} for val in op_value]
-                        if nin_conditions:
-                            result.append({"bool": {"must_not": nin_conditions}})
+                        # For $nin, use must_not with terms query
+                        if isinstance(op_value, (list, tuple)) and len(op_value) > 0:
+                            result.append({"bool": {"must_not": [{"terms": {field_name: list(op_value)}}]}})
                 
                 if range_conditions:
                     result.append({"range": {field_name: range_conditions}})
@@ -2323,9 +2327,17 @@ class BaseClient(BaseConnection, AdminAPI):
         embeddings = []
         
         for row in result_rows:
-            # Extract id (may be in different column names)
-            row_id = row.get("id") or row.get("_id") or row.get("ID")
-            # Convert bytes _id to string format
+            # Extract id (handle different column names and fallbacks)
+            row_id = None
+            for key in ("id", "_id", "ID", "Id", "_ID"):
+                if key in row and row.get(key) is not None:
+                    row_id = row.get(key)
+                    break
+            if row_id is None:
+                for key in row.keys():
+                    if isinstance(key, str) and key.lower().endswith("id") and row.get(key) is not None:
+                        row_id = row.get(key)
+                        break
             row_id = self._convert_id_from_bytes(row_id)
             ids.append(row_id)
             
