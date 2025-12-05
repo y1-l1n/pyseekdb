@@ -351,11 +351,13 @@ class TestCollectionHybridSearch:
                     "where_document": {
                         "$contains": "machine learning"
                     },
-                    "n_results": 10
+                    "n_results": 10,
+                    "boost": 0.4
                 },
                 knn={
                     "query_embeddings": self._generate_query_vector(actual_dimension),
-                    "n_results": 10
+                    "n_results": 10,
+                    "boost": 1.6
                 },
                 rank={
                     "rrf": {
@@ -630,11 +632,13 @@ class TestCollectionHybridSearch:
                     "where_document": {
                         "$contains": "machine learning"
                     },
-                    "n_results": 10
+                    "n_results": 10,
+                    "boost": 0.4
                 },
                 knn={
                     "query_embeddings": self._generate_query_vector(actual_dimension),
-                    "n_results": 10
+                    "n_results": 10,
+                    "boost": 1.6
                 },
                 rank={
                     "rrf": {
@@ -1005,11 +1009,13 @@ class TestCollectionHybridSearch:
                     "where_document": {
                         "$contains": "machine learning"
                     },
-                    "n_results": 10
+                    "n_results": 10,
+                    "boost": 0.4
                 },
                 knn={
                     "query_embeddings": self._generate_query_vector(actual_dimension),
-                    "n_results": 10
+                    "n_results": 10,
+                    "boost": 1.6
                 },
                 rank={
                     "rrf": {

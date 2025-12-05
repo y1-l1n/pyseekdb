@@ -1799,11 +1799,13 @@ class BaseClient(BaseConnection, AdminAPI):
             query: Full-text search configuration dict with:
                 - where_document: Document filter conditions (e.g., {"$contains": "text"})
                 - where: Metadata filter conditions (e.g., {"page": {"$gte": 5}})
+                - boost: Weight for text query when combining hybrid results (optional)
             knn: Vector search configuration dict with:
                 - query_texts: Query text(s) to be embedded (optional if query_embeddings provided)
                 - query_embeddings: Query vector(s) (optional if query_texts provided)
                 - where: Metadata filter conditions (optional)
                 - n_results: Number of results for vector search (optional)
+                - boost: Weight for vector search when combining hybrid results (optional)
             rank: Ranking configuration dict (e.g., {"rrf": {"rank_window_size": 60, "rank_constant": 60}})
             n_results: Final number of results to return after ranking (default: 10)
             include: Fields to include in results (optional)
@@ -1933,6 +1935,7 @@ class BaseClient(BaseConnection, AdminAPI):
         """
         where_document = query.get("where_document")
         where = query.get("where")
+        boost = query.get("boost")
         
         # Case 1: Scalar query (metadata filtering only, no full-text search)
         if not where_document and where:
@@ -1956,7 +1959,7 @@ class BaseClient(BaseConnection, AdminAPI):
         # Case 2: Full-text search (with or without metadata filtering)
         if where_document:
             # Build document query using query_string
-            doc_query = self._build_document_query(where_document)
+            doc_query = self._build_document_query(where_document, boost=boost)
             if doc_query:
                 # Build filter from where condition
                 filter_conditions = self._build_metadata_filter_for_search_parm(where)
@@ -1975,12 +1978,13 @@ class BaseClient(BaseConnection, AdminAPI):
         
         return None
     
-    def _build_document_query(self, where_document: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _build_document_query(self, where_document: Dict[str, Any], boost: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """
         Build document query from where_document condition using query_string
         
         Args:
             where_document: Document filter conditions
+            boost: Optional weight for this document query
             
         Returns:
             query_string query dict
@@ -1988,14 +1992,19 @@ class BaseClient(BaseConnection, AdminAPI):
         if not where_document:
             return None
         
+        def _with_boost(expr: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+            if boost is not None and expr and "query_string" in expr:
+                expr["query_string"]["boost"] = boost
+            return expr
+        
         # Handle $contains - use query_string
         if "$contains" in where_document:
-            return {
+            return _with_boost({
                 "query_string": {
                     "fields": ["document"],
                     "query": where_document["$contains"]
                 }
-            }
+            })
         
         # Handle $and with $contains
         if "$and" in where_document:
@@ -2007,12 +2016,12 @@ class BaseClient(BaseConnection, AdminAPI):
             
             if contains_queries:
                 # Combine multiple $contains with AND
-                return {
+                return _with_boost({
                     "query_string": {
                         "fields": ["document"],
                         "query": " ".join(contains_queries)
                     }
-                }
+                })
         
         # Handle $or with $contains
         if "$or" in where_document:
@@ -2024,21 +2033,21 @@ class BaseClient(BaseConnection, AdminAPI):
             
             if contains_queries:
                 # Combine multiple $contains with OR
-                return {
+                return _with_boost({
                     "query_string": {
                         "fields": ["document"],
                         "query": " OR ".join(contains_queries)
                     }
-                }
+                })
         
         # Default: if it's a string, treat as $contains
         if isinstance(where_document, str):
-            return {
+            return _with_boost({
                 "query_string": {
                     "fields": ["document"],
                     "query": where_document
                 }
-            }
+            })
         
         return None
     
@@ -2157,6 +2166,7 @@ class BaseClient(BaseConnection, AdminAPI):
                 - query_embeddings: Query vector(s) (optional if query_texts provided)
                 - where: Metadata filter conditions (optional)
                 - n_results: Number of results for vector search (optional)
+                - boost: Optional weight for this knn search route
             **kwargs: Additional parameters, including:
                 embedding_function: EmbeddingFunction instance to convert query_texts to embeddings.
                                    Required if query_texts is provided. Must implement __call__
@@ -2169,6 +2179,7 @@ class BaseClient(BaseConnection, AdminAPI):
         query_embeddings = knn.get("query_embeddings")
         where = knn.get("where")
         n_results = knn.get("n_results", 10)
+        boost = knn.get("boost")
         
         # Handle vector generation logic:
         # 1. If query_embeddings are provided, use them directly without embedding
@@ -2224,6 +2235,8 @@ class BaseClient(BaseConnection, AdminAPI):
             "k": n_results,
             "query_vector": query_vector
         }
+        if boost is not None:
+            knn_expr["boost"] = boost
         
         # Add filter using JSON_EXTRACT format
         filter_conditions = self._build_metadata_filter_for_search_parm(where)
