@@ -9,6 +9,8 @@ Design Pattern:
 """
 from typing import Any, List, Dict, Optional, Union, TYPE_CHECKING
 
+from .hybrid_search import HybridSearch
+
 if TYPE_CHECKING:
     from .embedding_function import EmbeddingFunction, Documents as EmbeddingDocuments
 
@@ -427,18 +429,19 @@ class Collection:
     
     def hybrid_search(
         self,
-        query: Optional[Dict[str, Any]] = None,
+        query: Optional[Union[Dict[str, Any], HybridSearch]] = None,
         knn: Optional[Dict[str, Any]] = None,
         rank: Optional[Dict[str, Any]] = None,
         n_results: int = 10,
         include: Optional[List[str]] = None,
+        search: Optional[HybridSearch] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
         Hybrid search combining full-text search and vector similarity search
         
         Args:
-            query: Full-text search configuration dict with:
+            query: HybridSearch builder instance or full-text search configuration dict with:
                 - where_document: Document filter conditions (e.g., {"$contains": "text"})
                 - where: Metadata filter conditions (e.g., {"page": {"$gte": 5}})
                 - n_results: Number of results for full-text search (optional)
@@ -452,6 +455,8 @@ class Collection:
             rank: Ranking configuration dict (e.g., {"rrf": {"rank_window_size": 60, "rank_constant": 60}})
             n_results: Final number of results to return after ranking (default: 10)
             include: Fields to include in results (e.g., ["documents", "metadatas", "embeddings"])
+            search: HybridSearch builder instance (optional). If provided, takes precedence
+                over query/knn/rank/include/n_results arguments.
             **kwargs: Additional parameters
             
         Returns:
@@ -485,6 +490,25 @@ class Collection:
             # results["documents"][0] contains documents for the hybrid search
             # results["distances"][0] contains distances for the hybrid search
         """
+        # Allow passing builder as first positional argument
+        if isinstance(query, HybridSearch):
+            search = query
+            query = None
+
+        if isinstance(search, HybridSearch):
+            params = search.to_params(dimension=self._dimension)
+            query = params.get("query")
+            knn = params.get("knn")
+            rank = params.get("rank")
+            if params.get("n_results") is not None:
+                n_results = params["n_results"]
+            if params.get("include") is not None:
+                include = params["include"]
+
+        # When no query/knn provided, return only ids/distances by default
+        if include is None and not query and not knn:
+            include = []
+
         return self._client._collection_hybrid_search(
             collection_id=self._id,
             collection_name=self._name,
@@ -494,6 +518,7 @@ class Collection:
             n_results=n_results,
             include=include,
             embedding_function=self._embedding_function,
+            dimension=self._dimension,
             **kwargs
         )
     

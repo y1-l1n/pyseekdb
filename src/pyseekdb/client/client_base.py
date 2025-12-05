@@ -1785,6 +1785,7 @@ class BaseClient(BaseConnection, AdminAPI):
         rank: Optional[Dict[str, Any]] = None,
         n_results: int = 10,
         include: Optional[List[str]] = None,
+        dimension: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -1812,6 +1813,7 @@ class BaseClient(BaseConnection, AdminAPI):
             rank: Ranking configuration dict (e.g., {"rrf": {"rank_window_size": 60, "rank_constant": 60}})
             n_results: Final number of results to return after ranking (default: 10)
             include: Fields to include in results (optional)
+            dimension: Collection vector dimension for validating query_embeddings (optional)
             **kwargs: Additional parameters, including:
                 embedding_function: EmbeddingFunction instance to convert query_texts in knn to embeddings.
                                    Required if knn.query_texts is provided and collection doesn't have
@@ -1833,7 +1835,7 @@ class BaseClient(BaseConnection, AdminAPI):
         table_name = f"c$v1${collection_name}"
         
         # Build search_parm JSON
-        search_parm = self._build_search_parm(query, knn, rank, n_results, **kwargs)
+        search_parm = self._build_search_parm(query, knn, rank, n_results, dimension=dimension, **kwargs)
         
         # Convert search_parm to JSON string
         search_parm_json = json.dumps(search_parm, ensure_ascii=False)
@@ -1882,20 +1884,22 @@ class BaseClient(BaseConnection, AdminAPI):
     
     def _build_search_parm(
         self,
-        query: Optional[Dict[str, Any]],
-        knn: Optional[Dict[str, Any]],
+        query: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]],
+        knn: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]],
         rank: Optional[Dict[str, Any]],
         n_results: int,
+        dimension: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
         Build search_parm JSON from query, knn, and rank parameters
         
         Args:
-            query: Full-text search configuration dict
-            knn: Vector search configuration dict
+            query: Full-text search configuration dict or list of dicts
+            knn: Vector search configuration dict or list of dicts
             rank: Ranking configuration dict
             n_results: Final number of results to return
+            dimension: Collection dimension for validating query_embeddings (optional)
             **kwargs: Additional parameters, including:
                 embedding_function: EmbeddingFunction instance to convert query_texts in knn to embeddings.
                                    Required if knn.query_texts is provided. Must implement __call__
@@ -1907,18 +1911,32 @@ class BaseClient(BaseConnection, AdminAPI):
         search_parm = {}
         
         # Build query part (full-text search or scalar query)
+        query_expr_list: List[Dict[str, Any]] = []
         if query:
-            query_expr = self._build_query_expression(query)
-            if query_expr:
-                search_parm["query"] = query_expr
+            query_items = query if isinstance(query, list) else [query]
+            for query_item in query_items:
+                query_expr = self._build_query_expression(query_item)
+                if query_expr:
+                    query_expr_list.append(query_expr)
+        if query_expr_list:
+            search_parm["query"] = query_expr_list if len(query_expr_list) > 1 else query_expr_list[0]
         
         # Build knn part (vector search)
+        knn_expr_list: List[Dict[str, Any]] = []
         if knn:
-            knn_expr = self._build_knn_expression(knn, **kwargs)
-            if knn_expr:
-                search_parm["knn"] = knn_expr
+            knn_items = knn if isinstance(knn, list) else [knn]
+            for knn_item in knn_items:
+                knn_expr = self._build_knn_expression(knn_item, dimension=dimension, **kwargs)
+                if not knn_expr:
+                    continue
+                if isinstance(knn_expr, list):
+                    knn_expr_list.extend(knn_expr)
+                else:
+                    knn_expr_list.append(knn_expr)
+        if knn_expr_list:
+            search_parm["knn"] = knn_expr_list if len(knn_expr_list) > 1 else knn_expr_list[0]
         
-        if n_results:
+        if n_results is not None:
             search_parm["size"] = n_results
 
         # Build rank part
@@ -2191,7 +2209,12 @@ class BaseClient(BaseConnection, AdminAPI):
         
         return result
     
-    def _build_knn_expression(self, knn: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
+    def _build_knn_expression(
+        self,
+        knn: Dict[str, Any],
+        dimension: Optional[int] = None,
+        **kwargs
+    ) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
         """
         Build knn expression from knn dict
         
@@ -2206,9 +2229,10 @@ class BaseClient(BaseConnection, AdminAPI):
                 embedding_function: EmbeddingFunction instance to convert query_texts to embeddings.
                                    Required if query_texts is provided. Must implement __call__
                                    method that accepts Documents and returns Embeddings (List[List[float]]).
+            dimension: Optional collection dimension for validating embeddings
             
         Returns:
-            knn expression dict with optional filter
+            knn expression dict (or list of dicts when multiple query vectors) with optional filter
         """
         query_texts = knn.get("query_texts")
         query_embeddings = knn.get("query_embeddings")
@@ -2216,32 +2240,27 @@ class BaseClient(BaseConnection, AdminAPI):
         n_results = knn.get("n_results", 10)
         boost = knn.get("boost")
         
-        # Handle vector generation logic:
-        # 1. If query_embeddings are provided, use them directly without embedding
-        # 2. If query_embeddings are not provided but query_texts are provided:
-        #    - If embedding_function is provided, use it to generate embeddings from query_texts
-        #    - If embedding_function is not provided, raise an error
-        # 3. If neither query_embeddings nor query_texts are provided, raise an error
-        
         embedding_function = kwargs.get('embedding_function')
-        
-        # Get query vector
-        query_vector = None
-        if query_embeddings:
-            # Query embeddings provided, use them directly without embedding
-            if isinstance(query_embeddings, list) and len(query_embeddings) > 0:
-                if isinstance(query_embeddings[0], list):
-                    query_vector = query_embeddings[0]  # Use first vector
-                else:
-                    query_vector = query_embeddings
-        elif query_texts:
-            # Query embeddings not provided but query_texts are provided, check for embedding_function
+
+        def _normalize_vectors(raw_embeddings: Any) -> List[List[float]]:
+            if raw_embeddings is None:
+                return []
+            if isinstance(raw_embeddings, list) and raw_embeddings and isinstance(raw_embeddings[0], list):
+                return raw_embeddings  # type: ignore[return-value]
+            if isinstance(raw_embeddings, list):
+                return [raw_embeddings]  # type: ignore[list-item]
+            return []
+
+        vectors: List[List[float]] = []
+        if query_embeddings is not None:
+            vectors = _normalize_vectors(query_embeddings)
+        elif query_texts is not None:
             if embedding_function is not None:
                 try:
                     texts = query_texts if isinstance(query_texts, list) else [query_texts]
-                    embeddings = self._embed_texts(texts[0] if len(texts) > 0 else texts, embedding_function=embedding_function)
+                    embeddings = self._embed_texts(texts, embedding_function=embedding_function)
                     if embeddings and len(embeddings) > 0:
-                        query_vector = embeddings[0]
+                        vectors = embeddings
                 except Exception as e:
                     logger.error(f"Failed to generate embeddings from query_texts: {e}")
                     raise ValueError(f"Failed to generate embeddings from query_texts: {e}")
@@ -2253,32 +2272,42 @@ class BaseClient(BaseConnection, AdminAPI):
                     "  2. Provide embedding_function to auto-generate embeddings from knn.query_texts."
                 )
         else:
-            # Neither query_embeddings nor query_texts provided, raise an error
             raise ValueError(
                 "knn requires either query_embeddings or query_texts. "
                 "Please provide either:\n"
                 "  1. knn.query_embeddings directly, or\n"
                 "  2. knn.query_texts with embedding_function to generate embeddings."
             )
-        
-        if not query_vector:
+
+        if not vectors:
             return None
+
+        if dimension is not None:
+            for vec in vectors:
+                if len(vec) != dimension:
+                    raise ValueError(
+                        f"Embedding dimension mismatch: expected {dimension}, got {len(vec)}"
+                    )
         
-        # Build knn expression
-        knn_expr = {
-            "field": "embedding",
-            "k": n_results,
-            "query_vector": query_vector
-        }
-        if boost is not None:
-            knn_expr["boost"] = boost
-        
-        # Add filter using JSON_EXTRACT format
+        # Build knn expressions (one per vector)
+        knn_exprs: List[Dict[str, Any]] = []
         filter_conditions = self._build_metadata_filter_for_search_parm(where)
-        if filter_conditions:
-            knn_expr["filter"] = filter_conditions
+        for vector in vectors:
+            expr = {
+                "field": "embedding",
+                "k": n_results,
+                "query_vector": vector
+            }
+            if boost is not None:
+                expr["boost"] = boost
+            
+            # Add filter using JSON_EXTRACT format
+            if filter_conditions:
+                expr["filter"] = filter_conditions
+            
+            knn_exprs.append(expr)
         
-        return knn_expr
+        return knn_exprs if len(knn_exprs) > 1 else knn_exprs[0]
     
     def _build_source_fields(self, include: Optional[List[str]]) -> List[str]:
         """Build _source fields list from include parameter"""
