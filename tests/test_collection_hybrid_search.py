@@ -245,6 +245,26 @@ class TestCollectionHybridSearch:
             for doc in results["documents"][0]:
                 if doc:
                     assert "machine" in doc.lower() or "learning" in doc.lower()
+
+            # Test 1b: Full-text search with $not_contains
+            print(f"   Testing hybrid_search with $not_contains filter")
+            forbidden_phrase = "machine learning"
+            results_not = collection.hybrid_search(
+                query={
+                    "where_document": {
+                        "$not_contains": forbidden_phrase
+                    }
+                },
+                n_results=5,
+                include=["documents", "metadatas"]
+            )
+
+            assert results_not is not None
+            assert "documents" in results_not
+            docs_not = results_not["documents"][0] if results_not.get("documents") else []
+            for doc in docs_not:
+                if doc:
+                    assert forbidden_phrase not in doc.lower()
             
         finally:
             # Cleanup
@@ -590,6 +610,26 @@ class TestCollectionHybridSearch:
             for doc in results["documents"][0]:
                 if doc:
                     assert "machine" in doc.lower() or "learning" in doc.lower()
+
+            # Test 1b: Full-text search with $not_contains
+            print(f"   Testing hybrid_search with $not_contains filter (SeekdbServer)")
+            forbidden_phrase = "machine learning"
+            results_not = collection.hybrid_search(
+                query={
+                    "where_document": {
+                        "$not_contains": forbidden_phrase
+                    }
+                },
+                n_results=5,
+                include=["documents", "metadatas"]
+            )
+
+            assert results_not is not None
+            assert "documents" in results_not
+            docs_not = results_not["documents"][0] if results_not.get("documents") else []
+            for doc in docs_not:
+                if doc:
+                    assert forbidden_phrase not in doc.lower()
             
         finally:
             # Cleanup
@@ -918,6 +958,26 @@ class TestCollectionHybridSearch:
             for doc in results["documents"][0]:
                 if doc:
                     assert "machine" in doc.lower() or "learning" in doc.lower()
+
+            # Test 1b: Full-text search with $not_contains
+            print(f"   Testing hybrid_search with $not_contains filter (SeekdbEmbedded)")
+            forbidden_phrase = "machine learning"
+            results_not = collection.hybrid_search(
+                query={
+                    "where_document": {
+                        "$not_contains": forbidden_phrase
+                    }
+                },
+                n_results=5,
+                include=["documents", "metadatas"]
+            )
+
+            assert results_not is not None
+            assert "documents" in results_not
+            docs_not = results_not["documents"][0] if results_not.get("documents") else []
+            for doc in docs_not:
+                if doc:
+                    assert forbidden_phrase not in doc.lower()
             
         finally:
             # Cleanup

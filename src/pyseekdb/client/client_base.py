@@ -1993,8 +1993,26 @@ class BaseClient(BaseConnection, AdminAPI):
             return None
         
         def _with_boost(expr: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-            if boost is not None and expr and "query_string" in expr:
-                expr["query_string"]["boost"] = boost
+            if boost is None or not expr:
+                return expr
+
+            def _apply_boost(target: Any) -> None:
+                if not isinstance(target, dict):
+                    return
+                if "query_string" in target and isinstance(target["query_string"], dict):
+                    target["query_string"]["boost"] = boost
+                    return
+                bool_clause = target.get("bool")
+                if isinstance(bool_clause, dict):
+                    for key in ("must", "should", "must_not", "filter"):
+                        clause = bool_clause.get(key)
+                        if isinstance(clause, list):
+                            for item in clause:
+                                _apply_boost(item)
+                        elif isinstance(clause, dict):
+                            _apply_boost(clause)
+
+            _apply_boost(expr)
             return expr
         
         # Handle $contains - use query_string
@@ -2006,6 +2024,19 @@ class BaseClient(BaseConnection, AdminAPI):
                 }
             })
         
+        # Handle $not_contains - wrap query_string in must_not bool
+        if "$not_contains" in where_document:
+            return _with_boost({
+                "bool": {
+                    "must_not": [{
+                        "query_string": {
+                            "fields": ["document"],
+                            "query": where_document["$not_contains"]
+                        }
+                    }]
+                }
+            })
+
         # Handle $and with $contains
         if "$and" in where_document:
             and_conditions = where_document["$and"]
