@@ -362,9 +362,48 @@ class HybridSearch:
         self._knns.append(knn_payload)
         return self
 
-    def rank(self, rank: Dict[str, Any]) -> "HybridSearch":
-        if rank is not None:
-            self._rank = copy.deepcopy(rank)
+    def rank(self, rank: Optional[Union[str, Dict[str, Any]]] = None, **kwargs) -> "HybridSearch":
+        """
+        Configure the ranking strategy.
+
+        Supported usages:
+            rank()                               -> defaults to rrf with no params
+            rank("rrf")                          -> explicit rrf
+            rank("rrf", rank_window_size=60)     -> rrf with parameters
+            rank({"rrf": {"rank_window_size": 60}}) -> legacy dict style
+        """
+
+        def _validate_and_build(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+            if method != "rrf":
+                raise ValueError("Only 'rrf' rank method is supported")
+            if not isinstance(params, dict):
+                raise TypeError("Rank parameters must be provided as a dict")
+            allowed_keys = {"rank_window_size", "rank_constant"}
+            unsupported = set(params) - allowed_keys
+            if unsupported:
+                raise ValueError(
+                    f"Unsupported parameters for rrf rank: {sorted(unsupported)}"
+                )
+            # Drop None values to avoid sending unset params
+            return {k: copy.deepcopy(v) for k, v in params.items() if v is not None}
+
+        if isinstance(rank, dict):
+            if kwargs:
+                raise ValueError("Do not mix dict rank input with keyword parameters")
+            if len(rank) != 1:
+                raise ValueError("Rank dict must contain exactly one rank method")
+            method, params = next(iter(rank.items()))
+            params = params or {}
+            validated = _validate_and_build(method, params)
+            self._rank = {method: validated}
+            return self
+
+        method = "rrf" if rank is None else rank
+        if not isinstance(method, str):
+            raise TypeError("Rank must be provided as a string, dict, or None")
+
+        validated = _validate_and_build(method, kwargs)
+        self._rank = {method: validated}
         return self
 
     def limit(self, n_results: int) -> "HybridSearch":

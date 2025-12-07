@@ -840,7 +840,7 @@ hs = hs.knn({"query_texts": ["semantic search"], "where": {"topic": {"$eq": "nlp
 ```
 4) Ranking and final wiring
 ```python
-hs = hs.rank({"rrf": {}})   # or custom {"rrf": {"rank_window_size": 60, "rank_constant": 60}}
+hs = hs.rank()  # defaults to rrf; or hs.rank("rrf", rank_window_size=60, rank_constant=60)
 hs = hs.limit(5)            # final fused result count
 hs = hs.select(DOCUMENTS, METADATAS, EMBEDDINGS)  # include embeddings explicitly when needed
 ```
@@ -850,6 +850,7 @@ results = collection.hybrid_search(hs)
 ```
 6) Key behaviors & gotchas
 - Multiple `.query(...)` / `.knn(...)` calls produce multiple routes; `TEXT([...])` or multiple embeddings also auto-expand into multiple routes.
+- `.rank()` defaults to `rrf`; only `rrf` is supported, with optional `rank_window_size` and `rank_constant` keyword args. Dict form is still accepted but should not mix with kwargs.
 - `query_texts` requires the collection’s `embedding_function`; otherwise use `query_embeddings`.
 - Dimension mismatches (when `collection.dimension` is known) raise `ValueError`.
 - `ids`/`distances` always return; `documents`/`metadatas` return by default when `include=None`; add `embeddings` via `.select(...)` or `include` to fetch vectors.

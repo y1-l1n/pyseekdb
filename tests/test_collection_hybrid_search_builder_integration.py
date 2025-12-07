@@ -307,7 +307,7 @@ class TestCollectionHybridSearchWithBuilder:
                 lambda hs: hs
                 .query(DOCUMENT.contains("machine learning"), n_results=10, boost=0.4)
                 .knn(EMBEDDINGS(self._generate_query_vector(actual_dimension)), n_results=10, boost=1.6)
-                .rank({"rrf": {"rank_window_size": 60, "rank_constant": 60}})
+                .rank("rrf", rank_window_size=60, rank_constant=60)
                 .limit(5)
                 .select(DOCUMENTS, METADATAS, EMBEDDINGS_FIELD)
             )
@@ -411,7 +411,7 @@ class TestCollectionHybridSearchWithBuilder:
                     K("tag").is_in(["ml", "python"]),
                     n_results=10
                 )
-                .rank({"rrf": {}})
+                .rank()
                 .limit(5)
                 .select(DOCUMENTS, METADATAS)
             )
@@ -577,7 +577,7 @@ class TestCollectionHybridSearchWithBuilder:
                 lambda hs: hs
                 .query(DOCUMENT.contains("machine learning"), n_results=10, boost=0.4)
                 .knn(EMBEDDINGS(self._generate_query_vector(actual_dimension)), n_results=10, boost=1.6)
-                .rank({"rrf": {"rank_window_size": 60, "rank_constant": 60}})
+                .rank("rrf", rank_window_size=60, rank_constant=60)
                 .limit(5)
                 .select(DOCUMENTS, METADATAS, EMBEDDINGS_FIELD)
             )
@@ -721,7 +721,7 @@ class TestCollectionHybridSearchWithBuilder:
                     K("tag").is_in(["ml", "python"]),
                     n_results=10
                 )
-                .rank({"rrf": {}})
+                .rank()
                 .limit(5)
                 .select(DOCUMENTS, METADATAS)
             )
@@ -970,7 +970,7 @@ class TestCollectionHybridSearchWithBuilder:
                 lambda hs: hs
                 .query(DOCUMENT.contains("machine learning"), n_results=10, boost=0.4)
                 .knn(EMBEDDINGS(self._generate_query_vector(actual_dimension)), n_results=10, boost=1.6)
-                .rank({"rrf": {"rank_window_size": 60, "rank_constant": 60}})
+                .rank("rrf", rank_window_size=60, rank_constant=60)
                 .limit(5)
                 .select(DOCUMENTS, METADATAS, EMBEDDINGS_FIELD)
             )
@@ -1063,7 +1063,7 @@ class TestCollectionHybridSearchWithBuilder:
                     K("tag").is_in(["ml", "python"]),
                     n_results=10
                 )
-                .rank({"rrf": {}})
+                .rank()
                 .limit(5)
                 .select(DOCUMENTS, METADATAS)
             )
